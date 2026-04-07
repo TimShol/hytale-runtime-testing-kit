@@ -1,0 +1,193 @@
+---
+title: "ECS Testing"
+description: "Test entity creation, component operations, and ECS queries with EcsAssert, EcsTestContext, and @EcsTest."
+---
+
+The ECS (Entity Component System) is the backbone of Hytale's game engine. Every NPC, player, block entity, projectile, and effect is an entity made up of components. HRTK's ECS surface lets you create entities, attach and remove components, look up entities, and check entity state - all within the live game.
+
+If you are new to ECS, here are the key concepts:
+
+- **Entity Store** - The database that holds all entities and their components. Every entity lives inside the store.
+- **Ref** - A lightweight reference (like an ID) to an entity in the store. You use refs to look up, modify, or destroy entities.
+- **Component** - A data object attached to an entity. Components hold state but no logic. For example, `TransformComponent` holds position/rotation, `HealthComponent` holds HP values.
+- **Archetype** - The set of component types an entity has. Entities with the same components share an archetype, which lets the engine look them up efficiently.
+
+Understanding these concepts helps when writing mod tests, because nearly every game system in Hytale reads and writes components on entities through the store.
+
+## @EcsTest
+
+Annotate a test method with `@EcsTest` to receive an `EcsTestContext` and automatically get the `"ecs"` tag. Tests marked with `@EcsTest` run on the world thread and have full access to the entity store.
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.EcsTest;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.EcsAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.context.EcsTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.util.List;
+
+@HytaleSuite(value = "ECS Surface Tests", isolation = IsolationStrategy.SNAPSHOT)
+@Tag("ecs")
+public class EcsSurfaceTests {
+
+    @EcsTest
+    @Order(1)
+    @DisplayName("Create an entity and verify it exists")
+    void testCreateEntity(EcsTestContext ctx) {
+        // Creating an entity returns a Ref that points to the new entity in the store.
+        // This is the most fundamental ECS operation - if this fails, nothing else works.
+        Object ref = ctx.createEntity();
+
+        // The ref must be non-null, meaning the store successfully allocated an entity slot.
+        EcsAssert.assertRefValid(ref);
+    }
+
+    @EcsTest
+    @Order(2)
+    @DisplayName("Attach a TransformComponent and verify it is present")
+    void testPutAndVerifyComponent(EcsTestContext ctx) {
+        // Step 1: Create a bare entity with no components
+        Object ref = ctx.createEntity();
+
+        // Step 2: Attach a TransformComponent via the command buffer.
+        // The command buffer batches operations and applies them on flush().
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        // Step 3: Verify the component is now attached to the entity.
+        // This confirms the archetype changed to include TransformComponent.
+        HytaleAssert.assertTrue(
+            "Entity should have TransformComponent after putComponent + flush",
+            ctx.hasComponent(ref, TransformComponent.getComponentType())
+        );
+    }
+
+    @EcsTest
+    @Order(3)
+    @DisplayName("Retrieve a component with assertGetComponent")
+    void testAssertGetComponent(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        // assertGetComponent both asserts the component exists AND returns it.
+        // This is useful when you need to inspect the component's data after retrieval.
+        Object component = EcsAssert.assertGetComponent(
+            ctx.getStore(), ref, TransformComponent.getComponentType()
+        );
+        HytaleAssert.assertNotNull("Retrieved component should not be null", component);
+    }
+
+    @EcsTest
+    @Order(4)
+    @DisplayName("Remove a component and verify it is gone")
+    void testRemoveComponent(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        // Remove the component through the command buffer, then flush.
+        ctx.removeComponent(ref, TransformComponent.getComponentType());
+        ctx.flush();
+
+        // The entity should no longer have the TransformComponent.
+        // This verifies that the archetype reverted correctly.
+        EcsAssert.assertNotHasComponent(
+            ctx.getStore(), ref, TransformComponent.getComponentType()
+        );
+    }
+
+    @EcsTest
+    @Order(5)
+    @DisplayName("Find entities by component type")
+    void testFindEntitiesByComponent(EcsTestContext ctx) {
+        // Create an entity and give it a TransformComponent so it shows up in queries.
+        Object ref = ctx.createEntity();
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        // findEntities returns all entity refs that have the given component type.
+        // This is how game systems iterate over entities they care about.
+        List<?> found = ctx.findEntities(TransformComponent.getComponentType());
+        HytaleAssert.assertNotEmpty(found);
+
+        // countEntities is a shortcut that returns the count without allocating a list.
+        int count = ctx.countEntities(TransformComponent.getComponentType());
+        HytaleAssert.assertGreaterThan(0, count);
+    }
+
+    @EcsTest
+    @Order(6)
+    @DisplayName("Verify an invalid ref is detected")
+    void testInvalidRef(EcsTestContext ctx) {
+        // Passing null as a ref should be caught by assertRefInvalid.
+        // This is useful for testing error paths where entity creation might fail.
+        EcsAssert.assertRefInvalid(null);
+    }
+}
+```
+
+<Tip>
+Use `IsolationStrategy.SNAPSHOT` on your suite when your ECS tests mutate state. The snapshot captures the store before the suite and restores it after, so your tests do not pollute the live server.
+</Tip>
+
+## EcsTestContext Methods
+
+| Method | Description |
+|---|---|
+| `getStore()` | Get the ECS store |
+| `getCommandBuffer()` | Get a command buffer for deferred operations |
+| `createEntity()` | Create a new empty entity, returns a reference |
+| `flush()` | Execute all deferred command buffer operations |
+| `putComponent(ref, type, component)` | Attach a component to an entity |
+| `removeComponent(ref, type)` | Remove a component from an entity |
+| `getComponent(ref, type)` | Get a component (returns null if absent) |
+| `hasComponent(ref, type)` | Check if entity has a component |
+| `waitTicks(n)` | Wait for N world ticks |
+| `awaitCondition(supplier, maxTicks)` | Poll each tick until non-null or timeout |
+| `findEntities(componentType)` | Find all entities with a given component |
+| `countEntities(componentType)` | Count entities with a given component |
+
+## EcsAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertHasComponent(store, ref, type)` | Assert entity has the component |
+| `assertNotHasComponent(store, ref, type)` | Assert entity lacks the component |
+| `assertGetComponent(store, ref, type)` | Assert component exists and return it |
+| `assertRefValid(ref)` | Assert entity reference is non-null |
+| `assertRefInvalid(ref)` | Assert entity reference is null |
+
+## How EcsAssert Works Internally
+
+Because `hrtk-api` is a compile-only dependency (it never ships with the server), all ECS assertions use reflection under the hood. You pass the store, refs, and component types as `Object` in your code, but they must be the correct Hytale types at runtime.
+
+<Note>
+This design lets your mod compile against `hrtk-api` without needing the Hytale server JAR at compile time.
+</Note>
+
+## Why Test ECS Operations?
+
+ECS testing matters for modders because:
+
+1. **Component integrity** - Verify that your custom components attach and detach correctly without corrupting the archetype.
+2. **Query correctness** - Confirm that your systems find the right entities. A missing component means your system silently skips entities it should process.
+3. **Lifecycle safety** - Catch bugs where entities are used after destruction, or components are read before they are attached.
+4. **Regression detection** - Server updates can change how the ECS handles edge cases. Tests catch these regressions early.
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - block operations and entity spawning
+- [Stats & Combat](/surfaces/stats-and-combat) - health, damage, and alive/dead assertions
+- [Isolation: SNAPSHOT](/isolation/snapshot) - protect live ECS state during tests

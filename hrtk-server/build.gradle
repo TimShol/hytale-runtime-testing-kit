@@ -1,0 +1,78 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.3.0'
+}
+
+def mod_build = 0
+
+group = rootProject.property('group')
+version = rootProject.ext.computeVersion(mod_build)
+base.archivesName.set(rootProject.property('name') as String)
+
+dependencies {
+    implementation project(':hrtk-api')
+    compileOnly files(rootProject.ext.hytaleJar)
+    compileOnly 'org.jspecify:jspecify:0.3.0'
+
+    testImplementation files(rootProject.ext.hytaleJar)
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+}
+
+tasks.test {
+    useJUnitPlatform()
+    systemProperty 'java.util.logging.manager', 'com.hypixel.hytale.logger.backend.HytaleLogManager'
+    testLogging {
+        events = ['passed', 'skipped', 'failed']
+        exceptionFormat = 'short'
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
+}
+
+tasks.processResources {
+    def expandProps = [
+            'name'          : rootProject.property('name'),
+            'version'       : version,
+            'group'         : rootProject.property('group'),
+            'description'   : rootProject.property('description'),
+            'website'       : rootProject.property('website'),
+            'server_version': rootProject.property('server_version'),
+            'entry_point'   : rootProject.property('entry_point'),
+    ]
+
+    filesMatching('manifest.json') {
+        expand(expandProps)
+    }
+    inputs.properties(expandProps)
+}
+
+tasks.shadowJar {
+    archiveClassifier.set('')
+}
+
+tasks.register('deploy') {
+    group = 'hytale'
+    description = 'Deploys the HRTK plugin JAR to the Hytale Mods folder'
+    dependsOn tasks.shadowJar
+
+    doLast {
+        rootProject.ext.userModsDir.mkdirs()
+        def jarFile = tasks.shadowJar.archiveFile.get().asFile
+
+        copy {
+            from jarFile
+            into rootProject.ext.userModsDir
+        }
+
+        println "Deployed ${jarFile.name} to ${rootProject.ext.userModsDir}"
+    }
+}
+
+tasks.build {
+    dependsOn tasks.shadowJar
+    finalizedBy tasks.deploy
+}

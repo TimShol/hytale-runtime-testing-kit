@@ -1,0 +1,121 @@
+---
+title: "How It Works"
+description: "Understand the architecture behind HRTK: two-artifact design, JAR scanning, command-triggered execution, threading, and crash protection."
+---
+
+HRTK is a runtime testing framework purpose-built for Hytale server plugins. Unlike traditional test frameworks that run before deployment, HRTK executes tests **inside a live server** where the ECS, worlds, and plugin systems are fully operational. This page explains the key architectural decisions that make that possible.
+
+## Two-Artifact Design
+
+HRTK ships as two separate JARs with distinct roles:
+
+<CardGroup cols={2}>
+  <Card title="hrtk-api" icon="book">
+    **Compile-only dependency.** Contains annotations (`@HytaleTest`, `@HytaleSuite`, etc.), assertion classes (`HytaleAssert`, `EcsAssert`, `WorldAssert`), context interfaces (`TestContext`, `EcsTestContext`), and mock types. Your mod compiles against this JAR, but it is never loaded at runtime as a standalone plugin.
+  </Card>
+  <Card title="hrtk-server" icon="server">
+    **Server plugin.** Loaded by the Hytale server as a regular `JavaPlugin`. Contains the discovery engine, test runner, context implementations, isolation managers, the `/hrtk` command tree, and the result exporter. This is the only JAR that needs to be in your server's `plugins/` folder.
+  </Card>
+</CardGroup>
+
+This separation means your mod's production JAR carries zero runtime overhead from HRTK. The API classes are erased at compile time; the annotations survive in the bytecode for the server plugin to discover.
+
+## Discovery via JAR Scanning
+
+When the server starts - or when you run `/hrtk scan` - the discovery engine looks through every loaded plugin's JAR file to find classes with HRTK annotations like `@HytaleTest`.
+
+```
+TestDiscoveryEngine.scanAll()
+  -> PluginManager.get().getPlugins()
+    -> For each JavaPlugin:
+       -> Open JAR via plugin.getFile()
+       -> Walk .class entries (skip inner classes)
+       -> Load class via plugin's ClassLoader
+       -> Check for @HytaleTest, @EcsTest, @WorldTest, @Benchmark, etc.
+       -> Build TestClassInfo + TestMethodInfo
+       -> Register in PluginTestRegistry
+```
+
+<Note>
+Inner classes (entries containing `$`) are skipped during scanning. If you need helper classes for your tests, use top-level or static nested classes annotated with `@HytaleSuite`.
+</Note>
+
+The registry groups discovered tests by plugin name, then by suite. Each `TestClassInfo` captures lifecycle hooks (`@BeforeAll`, `@AfterAll`, `@BeforeEach`, `@AfterEach`), isolation strategy, class-level tags, and the ordered list of test methods.
+
+## Command-Triggered Execution
+
+Tests never run automatically. They are triggered through the `/hrtk` command tree:
+
+| Command | Purpose |
+|---|---|
+| `/hrtk run` | Run all tests (or filter by plugin/suite/tag) |
+| `/hrtk bench` | Run benchmarks only |
+| `/hrtk scan` | Re-discover tests from loaded plugins |
+| `/hrtk list` | List all discovered tests |
+| `/hrtk results` | Show results from the last run |
+| `/hrtk export` | Export results to JSON |
+| `/hrtk watch` | Auto-rerun tests when a plugin reloads |
+
+See [Commands](/running/commands) for the full reference.
+
+## Threading Model
+
+HRTK uses two execution paths depending on the test type:
+
+<AccordionGroup>
+  <Accordion title="Standard tests (no world required)">
+    Tests that don't need a world (pure logic, codec checks, basic assertions) run on a background thread. They don't block the server's main threads.
+  </Accordion>
+  <Accordion title="World-bound tests (@EcsTest, @WorldTest, @FlowTest)">
+    Tests that interact with entities or world state run on the **world thread** - the same thread that processes the game loop. This ensures all entity operations happen safely. The test runner waits for completion with the configured timeout.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+Because world-bound tests run on the world thread, a test that hangs would stall the game loop. The timeout (default 30 seconds) prevents this - if a test does not finish in time, it is marked `TIMED_OUT` and the runner moves on.
+</Warning>
+
+## Crash Protection
+
+A core design goal of HRTK is that **a test must never crash the server**. The test executor catches every possible error, not just regular exceptions. This catches:
+
+- **Assertion failures** - your test's assertions failed, reported as `FAILED`
+- **Runtime errors** (NullPointerException, etc.) - unexpected bugs, reported as `ERRORED`
+- **JVM-level errors** (StackOverflowError, OutOfMemoryError) - severe issues, reported as `ERRORED`
+
+```java
+try {
+    methodInfo.getMethod().invoke(suiteInstance, params);
+} catch (Throwable t) {
+    // A test must NEVER crash the server.
+    Throwable cause = unwrapCause(t);
+    if (cause instanceof AssertionFailedException) {
+        return TestResult(... TestStatus.FAILED ...);
+    } else {
+        return TestResult(... TestStatus.ERRORED ...);
+    }
+}
+```
+
+<Tip>
+Even if your test accidentally triggers an infinite recursion or a native memory error, the server keeps running. The test is simply marked as errored and the runner continues to the next test.
+</Tip>
+
+## What Happens at a Glance
+
+<Steps>
+  <Step title="Discovery">
+    On server start, `TestDiscoveryEngine` scans all plugin JARs for HRTK annotations and builds the `PluginTestRegistry`.
+  </Step>
+  <Step title="Trigger">
+    An operator runs `/hrtk run` (with optional filters for plugin, suite, tag, or method).
+  </Step>
+  <Step title="Execution">
+    The `TestRunner` iterates matching suites. For each suite, `SuiteExecutor` instantiates the test class, applies isolation, runs lifecycle hooks, and delegates to `TestExecutor` for each method.
+  </Step>
+  <Step title="Results">
+    Results are collected by `ResultCollector`, formatted by `ResultFormatter` for console output, and optionally exported to JSON via `ResultExporter`.
+  </Step>
+</Steps>
+
+Next, learn how to [write your first test](/writing-tests/your-first-test).

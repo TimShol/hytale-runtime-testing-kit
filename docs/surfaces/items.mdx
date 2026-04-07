@@ -1,0 +1,161 @@
+---
+title: "Items"
+description: "Create item stacks, inspect durability, metadata, and test stackability."
+---
+
+The Items surface provides tools for creating and inspecting item stacks outside of an inventory context. `ItemTestAdapter` lets you build stacks and read their properties, while `ItemAssert` covers durability, metadata, and stackability checks.
+
+Item testing ensures that your mod's items have the correct properties at creation time, that durability degrades and breaks as expected, that stackability rules are enforced, and that custom metadata is preserved. These are the kind of subtle bugs that slip through manual testing - an item that should not stack suddenly stacking, or a tool that starts with zero durability instead of max.
+
+## ItemStack Immutability
+
+An important concept to understand: item stacks created with `ctx.createStack(...)` are standalone snapshot objects. They are not placed in any inventory, and modifying the stack does not affect any inventory slot. If you need to test item behavior inside an inventory, use the [Inventory & Loot](/surfaces/inventory-and-loot) surface instead.
+
+When you read a stack's properties (ID, size, durability), you are reading the values at the time of creation. If the game engine modifies the underlying item type later, the stack object you hold may not reflect those changes.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.ItemAssert;
+import com.frotty27.hrtk.api.context.HytaleTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Item Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("items")
+public class ItemSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Create an item stack and verify its ID and size")
+    void createAndVerifyStack(HytaleTestContext ctx) {
+        // createStack builds a standalone item stack.
+        // The first argument is the item's asset name, the second is the count.
+        Object stack = ctx.createStack("Weapon_Sword_Iron", 1);
+
+        ItemAssert.assertItemId(stack, "Weapon_Sword_Iron");
+        ItemAssert.assertStackSize(stack, 1);
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Fresh tool has full durability and is not broken")
+    void freshToolHasFullDurability(HytaleTestContext ctx) {
+        Object stack = ctx.createStack("Iron_Pickaxe", 1);
+
+        // assertNotBroken verifies durability > 0.
+        // A freshly created tool should always pass this check.
+        ItemAssert.assertNotBroken(stack);
+
+        // You can also check the exact durability value if you know the expected max.
+        int durability = ctx.getDurability(stack);
+        int maxDurability = ctx.getMaxDurability(stack);
+        HytaleAssert.assertTrue(
+            "Durability should equal max for a new tool",
+            durability == maxDurability
+        );
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Verify a broken tool is detected")
+    void brokenToolIsDetected(HytaleTestContext ctx) {
+        // Create a tool and simulate it being fully depleted.
+        Object stack = ctx.createStack("Weapon_Sword_Iron", 1);
+        ctx.setDurability(stack, 0);
+
+        ItemAssert.assertBroken(stack);
+        ItemAssert.assertDurability(stack, 0);
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Stackable materials can stack, weapons cannot")
+    void stackabilityRules(HytaleTestContext ctx) {
+        // Materials like ingots should be stackable.
+        Object ingots = ctx.createStack("Iron_Ingot", 32);
+        ItemAssert.assertStackable(ingots);
+
+        // Weapons should not be stackable - each one is a unique item with durability.
+        Object sword = ctx.createStack("Weapon_Sword_Iron", 1);
+        ItemAssert.assertNotStackable(sword);
+    }
+
+    @HytaleTest
+    @Order(5)
+    @DisplayName("Custom metadata is preserved on item stacks")
+    void metadataIsPreserved(HytaleTestContext ctx) {
+        Object stack = ctx.createStack("Weapon_Sword_Iron", 1);
+
+        // setMetadata writes a key-value pair to the stack's metadata map.
+        // This is how mods attach custom data to items (enchantments, custom names, etc.).
+        ctx.setMetadata(stack, "enchantment", "fire_aspect");
+
+        ItemAssert.assertHasMetadata(stack, "enchantment");
+
+        Object value = ctx.getMetadata(stack, "enchantment");
+        HytaleAssert.assertEquals("fire_aspect", value);
+    }
+
+    @HytaleTest
+    @Order(6)
+    @DisplayName("Durability assertion catches wrong values")
+    void durabilityAssertionWorksCorrectly(HytaleTestContext ctx) {
+        Object stack = ctx.createStack("Iron_Pickaxe", 1);
+
+        int maxDurability = ctx.getMaxDurability(stack);
+        ItemAssert.assertMaxDurability(stack, maxDurability);
+        ItemAssert.assertDurability(stack, maxDurability);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `createStack` | `String itemId, int count` | `Object` | Create an item stack with the given ID and count |
+| `getItemId` | `Object stack` | `String` | Get the item type ID of the stack |
+| `getStackSize` | `Object stack` | `int` | Get the current stack count |
+| `getDurability` | `Object stack` | `int` | Get current durability value |
+| `getMaxDurability` | `Object stack` | `int` | Get maximum durability value |
+| `isBroken` | `Object stack` | `boolean` | Check if the item has zero durability |
+| `isStackable` | `Object stack` | `boolean` | Check if the item type supports stacking |
+| `getMetadata` | `Object stack, String key` | `Object` | Read a metadata entry from the stack |
+| `setMetadata` | `Object stack, String key, Object value` | `void` | Write a metadata entry to the stack |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertItemId` | `Object stack, String expected` | "Expected item ID [expected] but was [actual]" |
+| `assertStackSize` | `Object stack, int expected` | "Expected stack size [expected] but was [actual]" |
+| `assertDurability` | `Object stack, int expected` | "Expected durability [expected] but was [actual]" |
+| `assertMaxDurability` | `Object stack, int expected` | "Expected max durability [expected] but was [actual]" |
+| `assertBroken` | `Object stack` | "Expected item to be broken" |
+| `assertNotBroken` | `Object stack` | "Expected item to not be broken" |
+| `assertStackable` | `Object stack` | "Expected item to be stackable" |
+| `assertNotStackable` | `Object stack` | "Expected item to not be stackable" |
+| `assertHasMetadata` | `Object stack, String key` | "Expected item to have metadata key [key]" |
+
+## When to Test Items
+
+Item tests are most valuable when:
+
+- Your mod defines custom items with specific durability values
+- You need to verify stackability rules for new item types
+- Your items carry custom metadata (enchantments, upgrades, custom properties)
+- You want regression tests to catch changes in item type definitions after server updates
+
+## Next Steps
+
+- [Inventory & Loot](/surfaces/inventory-and-loot) - test items inside inventories
+- [Blocks](/surfaces/blocks) - test block types and placement
+- [Stats & Combat](/surfaces/stats-and-combat) - test weapon damage with combat assertions

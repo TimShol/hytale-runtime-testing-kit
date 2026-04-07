@@ -1,0 +1,161 @@
+---
+title: "Filtering & Tags"
+description: "Use @Tag, @Order, @Disabled, and @DisplayName to organize tests and run targeted subsets."
+---
+
+As your test suite grows, you will want to run specific subsets rather than everything. HRTK provides four annotations for organizing tests and a flexible filter system on the `/hrtk run` command.
+
+## @Tag
+
+Tags are string labels applied to suites or individual test methods. They let you categorize tests and run only the categories you need.
+
+```java
+import com.frotty27.hrtk.api.annotation.Tag;
+
+@HytaleSuite("Entity Tests")
+@Tag("ecs")  // All tests in this suite get the "ecs" tag
+public class EntityTests {
+
+    @HytaleTest
+    @Tag("spawn")  // This test has tags: ["ecs", "spawn"]
+    void testEntitySpawn() { }
+
+    @HytaleTest
+    @Tag({"ecs", "component"})  // Multiple tags on one method
+    void testComponentAttach() { }
+
+    @HytaleTest  // This test inherits only the class-level "ecs" tag
+    void testEntityExists() { }
+}
+```
+
+### Running by tag
+
+Use the `--tag` flag with `/hrtk run`:
+
+```
+/hrtk run --tag ecs            # Run all tests tagged "ecs"
+/hrtk run --tag spawn          # Run only tests tagged "spawn"
+/hrtk run --tag ecs,spawn      # Run tests tagged "ecs" OR "spawn"
+```
+
+<Tip>
+Certain test annotations add implicit tags automatically. `@EcsTest` adds `"ecs"` and `@WorldTest` adds `"integration"`. These implicit tags work with `--tag` filters just like manually applied tags.
+</Tip>
+
+## @Order
+
+By default, test execution order within a suite is unspecified. Use `@Order` to enforce a specific sequence. Lower values run first.
+
+```java
+import com.frotty27.hrtk.api.annotation.Order;
+
+@HytaleSuite("Sequential Tests")
+public class SequentialTests {
+
+    @HytaleTest
+    @Order(1)
+    void createEntity() { }
+
+    @HytaleTest
+    @Order(2)
+    void modifyEntity() { }
+
+    @HytaleTest
+    @Order(3)
+    void deleteEntity() { }
+}
+```
+
+Tests without `@Order` default to `Integer.MAX_VALUE` and run after all ordered tests.
+
+<Note>
+`@Order` controls execution sequence within a single suite. It does not affect the order of suites themselves. Suite order depends on the order plugins are scanned and classes are discovered.
+</Note>
+
+## @Disabled
+
+Skip a test or an entire suite. The test will appear in results as `SKIPPED` with the optional reason displayed.
+
+<CodeGroup>
+```java Disable a method
+@HytaleTest
+@Disabled("Blocked by issue #42 -- NPC pathfinding rework")
+void testNpcPathfinding() {
+    // This will not run
+}
+```
+
+```java Disable a suite
+@HytaleSuite("Legacy AI Tests")
+@Disabled("Pending migration to new behavior tree API")
+public class LegacyAITests {
+    // All tests in this class are skipped
+}
+```
+</CodeGroup>
+
+In the console output, disabled tests appear as:
+
+```
+    [SKIP] testNpcPathfinding (0ms)
+           (Blocked by issue #42 -- NPC pathfinding rework)
+```
+
+## @DisplayName
+
+Override the display name shown in test results. By default, HRTK uses the method name.
+
+```java
+@HytaleTest
+@DisplayName("Sword deals 5 damage to unarmored target")
+void testSwordDamage() {
+    // Display name in results: "Sword deals 5 damage to unarmored target"
+}
+```
+
+You can also set a display name directly on `@HytaleTest`:
+
+```java
+@HytaleTest("Sword deals 5 damage to unarmored target")
+void testSwordDamage() { }
+```
+
+If both `@HytaleTest("name")` and `@DisplayName("other name")` are present, `@DisplayName` takes priority.
+
+## Command-Line Filtering
+
+The `/hrtk run` command supports several filter dimensions:
+
+| Filter | Syntax | Example |
+|---|---|---|
+| All tests | `/hrtk run` | Runs everything |
+| By plugin | `/hrtk run MyMod` | All tests from MyMod |
+| By suite | `/hrtk run MyMod.CraftingTests` | One suite |
+| By method | `/hrtk run MyMod.CraftingTests#testRecipe` | One test |
+| By tag | `/hrtk run --tag combat` | All tests tagged "combat" |
+| Multiple tags | `/hrtk run --tag combat,damage` | Tests with either tag |
+| Fail fast | `/hrtk run --fail-fast` | Stop on first failure |
+| Verbose | `/hrtk run --verbose` | Extra detail in output |
+
+Filters can be combined:
+
+```
+/hrtk run MyMod --tag integration --fail-fast --verbose
+```
+
+<Accordion title="How filter matching works internally">
+The `TestFilter` builder constructs a filter with optional plugin name, suite name, method name, tag list, and flags. During execution:
+
+1. **Plugin filter** - if set, only suites from that plugin are considered.
+2. **Suite filter** - if set, only suites whose name matches are considered.
+3. **Method filter** - if set, only methods whose name matches are considered.
+4. **Tag filter** - if set, a test must have at least one of the specified tags (union, not intersection). Tag filtering checks both class-level and method-level tags. Suites that have no class-level tags but contain methods with matching tags are included (they are not rejected at the suite level).
+5. **Benchmark-only** - if set (via `/hrtk bench`), only `@Benchmark` methods are included.
+</Accordion>
+
+## Next Steps
+
+- [Parameterized Tests](/writing-tests/parameterized-tests) - run the same test with multiple inputs
+- [Timeouts & Repetition](/writing-tests/timeouts-and-repetition) - control timing and repetition
+- [Commands Reference](/running/commands) - full command documentation

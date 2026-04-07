@@ -1,0 +1,124 @@
+---
+title: "Isolation Overview"
+description: "Compare the three isolation strategies: NONE, SNAPSHOT, and DEDICATED_WORLD."
+---
+
+When tests run inside a live server, they share state with the production environment. Isolation strategies control how much of that shared state is protected from test mutations. Choosing the right strategy is critical for test reliability and server safety.
+
+## The Three Strategies
+
+| Strategy | Protects | Cost | Best For |
+|---|---|---|---|
+| `NONE` | Nothing | Zero overhead | Read-only tests, pure logic, assertions |
+| `SNAPSHOT` | Created entities | Track + cleanup per suite | Entity creation tests |
+| `DEDICATED_WORLD` | Full world state | World create + destroy per suite | Block, spawn, and integration tests |
+
+## Decision Flowchart
+
+<Steps>
+  <Step title="Does your test modify ECS components?">
+    If **no**, use `NONE`. If **yes**, continue.
+  </Step>
+  <Step title="Does your test modify blocks or spawn entities?">
+    If **no**, use `SNAPSHOT`. If **yes**, use `DEDICATED_WORLD`.
+  </Step>
+</Steps>
+
+## Side-by-Side Comparison
+
+<CardGroup cols={3}>
+  <Card title="NONE" icon="circle" href="/isolation/none">
+    No protection. Tests see and modify live server state. Suite instantiation is the only boundary. Fast but risky for mutating tests.
+  </Card>
+  <Card title="SNAPSHOT" icon="camera" href="/isolation/snapshot">
+    Entities created during the suite are tracked and removed after. Only cleans up created entities - modifications to pre-existing entities and blocks are NOT reverted.
+  </Card>
+  <Card title="DEDICATED_WORLD" icon="globe" href="/isolation/dedicated-world">
+    A temporary void world is created for the suite. All entities, blocks, and state are destroyed when the suite completes. Full isolation at the cost of world creation overhead.
+  </Card>
+</CardGroup>
+
+## Usage
+
+Set the isolation strategy on `@HytaleSuite`:
+
+```java
+// Default -- no isolation
+@HytaleSuite("Pure Logic Tests")
+public class PureLogicTests { }
+
+// Snapshot -- created entity cleanup
+@HytaleSuite(value = "Component Tests", isolation = IsolationStrategy.SNAPSHOT)
+public class ComponentTests { }
+
+// Dedicated world -- full isolation
+@HytaleSuite(value = "World Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+public class WorldTests { }
+```
+
+## When to Use Each
+
+<AccordionGroup>
+  <Accordion title="NONE: Read-only and logic tests">
+Use `NONE` when your tests:
+- Only read data, never write
+- Test pure functions or utility classes
+- Test codec round-trips (no server state involved)
+- Verify annotations, configuration, or metadata
+
+```java
+@HytaleSuite("Math Utils Tests")
+public class MathUtilsTests {
+    @HytaleTest
+    void testClamp() {
+        HytaleAssert.assertEquals(5, MathUtils.clamp(10, 0, 5));
+    }
+}
+```
+  </Accordion>
+  <Accordion title="SNAPSHOT: Entity creation tests">
+Use `SNAPSHOT` when your tests:
+- Create entities and need them cleaned up automatically
+- Attach components to newly created entities
+- Need created entities removed after the suite without destroying the world
+
+```java
+@HytaleSuite(value = "Stat Modifier Tests", isolation = IsolationStrategy.SNAPSHOT)
+public class StatModifierTests {
+    @EcsTest
+    void testApplyModifier(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        // Entity will be removed after suite
+    }
+}
+```
+  </Accordion>
+  <Accordion title="DEDICATED_WORLD: Block and spawn tests">
+Use `DEDICATED_WORLD` when your tests:
+- Place or break blocks
+- Spawn and kill entities
+- Need a clean, predictable world state
+- Test multi-step flows (spawn -> modify -> verify -> cleanup)
+
+```java
+@HytaleSuite(value = "Block Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+public class BlockTests {
+    @WorldTest
+    void testBlockPlacement(WorldTestContext ctx) {
+        ctx.setBlock(0, 64, 0, "Rock_Sandstone");
+        // Clean world -- no interference from existing blocks
+    }
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+Using `NONE` for tests that mutate server state is dangerous. Changes made by your tests will persist after the test run, potentially affecting live gameplay or other test suites.
+</Warning>
+
+## Next Steps
+
+- [Isolation: NONE](/isolation/none) - detailed guide
+- [Isolation: SNAPSHOT](/isolation/snapshot) - detailed guide
+- [Isolation: DEDICATED_WORLD](/isolation/dedicated-world) - detailed guide

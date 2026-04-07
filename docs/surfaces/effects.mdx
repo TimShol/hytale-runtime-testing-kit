@@ -1,0 +1,202 @@
+---
+title: "Effects"
+description: "Test status effects, invulnerability, and effect counts with EffectAssert."
+---
+
+Hytale entities can have active effects managed by an `EffectControllerComponent`. HRTK's `EffectAssert` class lets you verify which effects are present, count active effects, and check invulnerability state.
+
+Status effects are a critical part of game balance - poison, speed boosts, shields, and invulnerability all change how entities interact with the world. Testing effects ensures that your mod applies the right effects at the right time, that effects stack correctly, and that removal works cleanly.
+
+<Note>
+Effect assertions require entities with an EffectControllerComponent. Not all entity types have this component. Use `spawnNPC` with a role name that includes effects, or check for the component before asserting.
+</Note>
+
+## Important: Empty Entities Lack EffectControllerComponent
+
+A common pitfall when testing effects is using a bare entity created with `ctx.createEntity()`. Empty entities have no components at all, including no `EffectControllerComponent`. If you try to assert on effects for an empty entity, the assertion will fail because there is no controller to inspect.
+
+Always spawn a fully initialized NPC using `ctx.spawnNPC(...)` when testing effects. NPC entities come with the `EffectControllerComponent` pre-attached as part of their standard component set.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.EffectAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Effect Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("effects")
+public class EffectSurfaceTests {
+
+    private static final int POISON_INDEX = 0;
+    private static final int SPEED_BOOST_INDEX = 1;
+    private static final int SHIELD_INDEX = 2;
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Freshly spawned NPC has zero active effects")
+    void newNPCHasNoEffects(WorldTestContext ctx) {
+        // Spawn a real NPC so it has an EffectControllerComponent.
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // A freshly spawned NPC should have no active effects.
+        EffectAssert.assertEffectCount(store, entity, 0);
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Apply an effect and verify it is present")
+    void applyEffectAndVerify(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        // Apply a poison effect through the effect system.
+        // Effect indices are integer identifiers used by Hytale's effect system.
+        ctx.applyEffect(entity, POISON_INDEX);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+        EffectAssert.assertHasEffect(store, entity, POISON_INDEX);
+        EffectAssert.assertEffectCount(store, entity, 1);
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Remove an effect and verify it is gone")
+    void removeEffectAndVerify(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 20, 64, 20);
+        ctx.waitTicks(1);
+
+        // Apply, then remove.
+        ctx.applyEffect(entity, SPEED_BOOST_INDEX);
+        ctx.waitTicks(1);
+        EffectAssert.assertHasEffect(ctx.getStore(), entity, SPEED_BOOST_INDEX);
+
+        ctx.removeEffect(entity, SPEED_BOOST_INDEX);
+        ctx.waitTicks(1);
+        EffectAssert.assertNoEffect(ctx.getStore(), entity, SPEED_BOOST_INDEX);
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Multiple effects can be active simultaneously")
+    void multipleEffectsStack(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 30, 64, 30);
+        ctx.waitTicks(1);
+
+        // Apply three different effects.
+        ctx.applyEffect(entity, POISON_INDEX);
+        ctx.applyEffect(entity, SPEED_BOOST_INDEX);
+        ctx.applyEffect(entity, SHIELD_INDEX);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+        EffectAssert.assertEffectCount(store, entity, 3);
+        EffectAssert.assertHasEffect(store, entity, POISON_INDEX);
+        EffectAssert.assertHasEffect(store, entity, SPEED_BOOST_INDEX);
+        EffectAssert.assertHasEffect(store, entity, SHIELD_INDEX);
+    }
+
+    @WorldTest
+    @Order(5)
+    @DisplayName("Invulnerability effect makes entity invulnerable")
+    void invulnerabilityWorks(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Outlander_Hunter", 40, 64, 40);
+        ctx.waitTicks(1);
+
+        // Apply invulnerability through the effect system.
+        // assertInvulnerable checks a separate flag on the EffectControllerComponent.
+        ctx.applyInvulnerability(entity);
+        ctx.waitTicks(1);
+
+        EffectAssert.assertInvulnerable(ctx.getStore(), entity);
+    }
+
+    @WorldTest
+    @Order(6)
+    @DisplayName("Effect is absent when it was never applied")
+    void effectAbsentWhenNeverApplied(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 50, 64, 50);
+        ctx.waitTicks(1);
+
+        // assertNoEffect passes when the entity does not have the specified effect.
+        // This is a negative test - verify that effects are not present spuriously.
+        EffectAssert.assertNoEffect(ctx.getStore(), entity, POISON_INDEX);
+        EffectAssert.assertNoEffect(ctx.getStore(), entity, SPEED_BOOST_INDEX);
+    }
+}
+```
+
+## EffectAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertHasEffect(store, ref, effectIndex)` | Assert entity has the effect at the given index |
+| `assertNoEffect(store, ref, effectIndex)` | Assert entity does NOT have the effect |
+| `assertEffectCount(store, ref, expected)` | Assert the number of active effects |
+| `assertInvulnerable(store, ref)` | Assert entity is invulnerable |
+
+## How It Works
+
+`EffectAssert` locates the `EffectControllerComponent` on the entity via reflection, then calls:
+- `hasEffect(int index)` to check for specific effects
+- `getActiveEffects()` to count active effects
+- `isInvulnerable()` for invulnerability checks
+
+<Note>
+Effect indices are integer identifiers used by Hytale's effect system. The specific index values depend on your game content and mod configuration. Define constants in your test suite for readability, as shown in the example above.
+</Note>
+
+## Hytale Effect System API
+
+Beyond the HRTK wrappers, the Hytale server exposes these key effect classes directly:
+
+- **`EffectControllerComponent`** - The ECS component on entities that manages all active effects. Has `addEffect()`, `addInfiniteEffect()`, `removeEffect()`, `clearEffects()`, `isInvulnerable()`, `setInvulnerable()`, `getAllActiveEntityEffects()`.
+- **`ActiveEntityEffect`** - Represents a running effect instance. Has `getRemainingDuration()`, `isInfinite()`, `isDebuff()`, `isInvulnerable()`.
+- **`EntityEffect`** (asset) - The static effect definition loaded from content. Has `getDuration()`, `getOverlapBehavior()`, `getStatModifiers()`, `isDebuff()`, `isInfinite()`.
+- **`OverlapBehavior`** (enum) - `EXTEND`, `OVERWRITE`, `IGNORE`. Controls what happens when the same effect is applied twice.
+
+For advanced effect testing, access these classes directly instead of going through the HRTK adapter:
+
+```java
+var controller = (EffectControllerComponent) ctx.getComponent(
+    entity, EffectControllerComponent.getComponentType()
+);
+controller.addEffect(effectIndex, duration, isDebuff, isInvulnerable);
+```
+
+## Duration and Debuff Considerations
+
+Effects in Hytale typically have a duration (measured in ticks). When testing timed effects:
+
+- Apply the effect, then call `ctx.waitTicks(n)` to advance time
+- If the effect duration is shorter than your wait, the effect will have expired
+- Use `assertNoEffect` after waiting to verify that timed effects expire correctly
+- Debuffs (like poison) deal damage over time, so combine with `StatsAssert.assertAlive()` to verify the entity survives the debuff duration
+
+## Recommended Isolation
+
+Effect tests modify entity state. Use `IsolationStrategy.DEDICATED_WORLD`:
+
+```java
+@HytaleSuite(value = "Effect Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("effects")
+public class EffectTests { }
+```
+
+## Next Steps
+
+- [Stats & Combat](/surfaces/stats-and-combat) - health and stat modifier assertions
+- [Inventory & Loot](/surfaces/inventory-and-loot) - item and drop testing
+- [World Testing](/surfaces/world) - entity spawning and positioning

@@ -1,0 +1,67 @@
+HRTK Source-Available License
+
+Copyright (c) 2026 Frotty27
+
+1. Definitions
+
+   "Software" means the HRTK source code, compiled binaries,
+   documentation, assets, and any associated files in this repository.
+
+   "Author" means Frotty27, the original creator and copyright holder.
+
+   "You" means any person or entity accessing the Software.
+
+   "Contribution" means any code, documentation, or other material
+   submitted to this repository by any person other than the Author
+   (e.g. via pull request, patch, or issue).
+
+2. Permitted Uses
+
+   You MAY:
+   a. View, read, and study the source code for personal or educational
+      purposes.
+   b. Use the compiled Software on servers and clients as intended by
+      the Author (i.e. as a Hytale mod).
+   c. Submit Contributions to this repository via pull requests or other
+      means approved by the Author.
+   d. Create mods that depend on the HRTK API at runtime, provided
+      they do not embed, bundle, or redistribute the Software itself.
+   e. Fork this repository on hosting platforms solely for the purpose
+      of preparing Contributions to submit back to this repository.
+
+3. Restrictions
+
+   You MAY NOT:
+   a. Redistribute, sublicense, sell, or otherwise transfer the Software
+      or any modified version of it, in whole or in part, without prior
+      written permission from the Author.
+   b. Use the Software or any portion of it in a competing product.
+   c. Remove or alter any copyright, license, or attribution notices.
+   d. Claim authorship of the Software or misrepresent its origin.
+
+4. Contributions
+
+   By submitting a Contribution, you:
+   a. Grant the Author a perpetual, worldwide, non-exclusive, royalty-free,
+      irrevocable license to use, modify, publish, distribute, sublicense,
+      and incorporate your Contribution into the Software under any terms
+      the Author chooses.
+   b. Represent that you have the legal right to grant the above license.
+   c. Agree that the Author is under no obligation to accept, merge, or
+      use your Contribution.
+
+5. No Warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+   OR OTHER DEALINGS IN THE SOFTWARE.
+
+6. Termination
+
+   This license terminates automatically if you violate any of its terms.
+   Upon termination, you must destroy all copies of the Software in your
+   possession.

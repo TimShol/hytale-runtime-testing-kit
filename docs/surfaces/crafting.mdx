@@ -1,0 +1,99 @@
+---
+title: "Crafting"
+description: "Test crafting recipe existence and recipe registry queries."
+---
+
+The Crafting surface lets you verify recipe registrations and query the recipe registry. `CraftingTestAdapter` provides direct registry access, while `CraftingAssert` offers assertion methods that fail with clear messages when recipes are missing or counts fall short.
+
+Crafting tests are smoke tests for your mod's content pipeline. If a recipe ID is misspelled in a JSON file or a new recipe fails to register, these tests catch it immediately instead of waiting for a player to discover the missing recipe in-game.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.CraftingAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.util.List;
+
+@HytaleSuite(value = "Crafting Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("crafting")
+public class CraftingSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Known recipe exists in the registry")
+    void knownRecipeExists() {
+        // assertRecipeExists checks the recipe registry for the given ID.
+        // If the recipe is not found, the test fails with a descriptive message.
+        CraftingAssert.assertRecipeExists("Weapon_Sword_Wooden");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Server has a minimum number of recipes loaded")
+    void minimumRecipeCount() {
+        // assertRecipeCount checks that at least N recipes are registered.
+        // This catches bulk registration failures where an entire recipe file
+        // fails to load silently.
+        CraftingAssert.assertRecipeCount(50);
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("List all recipe IDs for debugging")
+    void listRecipeIdsForVerification() {
+        // The adapter's listRecipeIds() returns all registered recipe IDs.
+        // Useful for debugging when a recipe assertion fails.
+        List<String> recipes = CraftingTestAdapter.listRecipeIds();
+        HytaleAssert.assertNotNull("Recipe list should not be null", recipes);
+        HytaleAssert.assertNotEmpty(recipes);
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Crafting plugin is available")
+    void craftingPluginPresent() {
+        // craftingPluginAvailable checks if the crafting plugin class is on the classpath.
+        // If this fails, no recipe tests will work.
+        HytaleAssert.assertTrue(
+            "Crafting plugin should be available",
+            CraftingTestAdapter.craftingPluginAvailable()
+        );
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `recipeExists(String recipeId)` | `boolean` | Check if a recipe with the given ID exists in the registry |
+| `listRecipeIds()` | `List<String>` | List all registered recipe IDs |
+| `craftingPluginAvailable()` | `boolean` | Check if the crafting plugin class is present on the classpath |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertRecipeExists(String recipeId)` | "Expected recipe '[recipeId]' to exist in registry but it was not found" |
+| `assertRecipeCount(int minCount)` | "Expected at least [minCount] recipes but found [actual]" |
+
+## Key Details
+
+- Both the assert and adapter classes use **reflection** to locate the recipe registry - no compile-time dependency on `HytaleServer.jar` is needed.
+- Use `listRecipeIds()` from `CraftingTestAdapter` to inspect the full registry contents when debugging a failing recipe assertion.
+- `craftingPluginAvailable()` is useful as a **precondition check** before running recipe-specific tests.
+
+## Next Steps
+
+- [Inventory & Loot](/surfaces/inventory-and-loot) - test crafting outputs in inventories
+- [Items](/surfaces/items) - verify crafted item properties
+- [Codecs](/surfaces/codecs) - test recipe serialization

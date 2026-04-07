@@ -1,0 +1,199 @@
+---
+title: "Writing Custom Flows"
+description: "How to design and structure your own multi-step flow tests for complex gameplay scenarios."
+---
+
+Flow tests can model any multi-step gameplay scenario. This guide covers patterns for structuring custom flows, handling edge cases, and making your flows robust and maintainable.
+
+## Basic Flow Structure
+
+Every flow test follows the same fundamental pattern:
+
+```
+Setup -> Action -> Wait -> Assert -> [Repeat] -> Cleanup
+```
+
+The cleanup step is handled automatically by `IsolationStrategy.DEDICATED_WORLD`.
+
+## Template
+
+```java
+@HytaleSuite(value = "My Custom Flows", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("flow")
+public class MyCustomFlows {
+
+    @FlowTest(timeoutTicks = 300)
+    @DisplayName("Descriptive name of the scenario")
+    void myFlowTest(WorldTestContext ctx) {
+        // Setup
+        Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        // Action
+        performAction(ctx, entity);
+
+        // Wait + Assert
+        Object result = ctx.awaitCondition(
+            () -> checkResult(ctx, entity),
+            100, "Expected result within 100 ticks"
+        );
+        HytaleAssert.assertNotNull(result);
+    }
+}
+```
+
+## Design Patterns
+
+<AccordionGroup>
+  <Accordion title="Linear flow (A -> B -> C)">
+The simplest flow: each step depends on the previous one, executed sequentially.
+
+```java
+@FlowTest(timeoutTicks = 200)
+void linearFlow(WorldTestContext ctx) {
+    // Step A: Create
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+    HytaleAssert.assertTrue(ctx.entityExists(entity));
+
+    // Step B: Modify
+    ctx.setPosition(entity, 100, 64, 100);
+    ctx.waitTicks(1);
+    double[] pos = ctx.getPosition(entity);
+    HytaleAssert.assertEquals(100.0, pos[0], 1.0);
+
+    // Step C: Remove
+    ctx.despawn(entity);
+    ctx.waitTicks(1);
+}
+```
+  </Accordion>
+  <Accordion title="Branching flow (if condition -> path A, else -> path B)">
+Some flows need to handle different outcomes depending on server behavior.
+
+```java
+@FlowTest(timeoutTicks = 300)
+void branchingFlow(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+
+    applyDamage(ctx, entity, 50);
+    ctx.waitTicks(3);
+
+    Object store = ctx.getStore();
+    try {
+        StatsAssert.assertDead(store, entity);
+        ctx.log("Entity died from 50 damage -- verifying loot path");
+        verifyLootDrops(ctx);
+    } catch (Exception e) {
+        ctx.log("Entity survived 50 damage -- verifying wounded path");
+        CombatAssert.assertHealthBelow(store, entity, 100f);
+    }
+}
+```
+  </Accordion>
+  <Accordion title="Multi-entity flow">
+Test interactions between multiple entities.
+
+```java
+@FlowTest(timeoutTicks = 300)
+void multiEntityFlow(WorldTestContext ctx) {
+    Object attacker = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    Object defender = ctx.spawnEntity("Trork_Warrior", 5, 64, 0);
+    ctx.waitTicks(2);
+
+    CombatAssert.assertAlive(ctx.getStore(), attacker);
+    CombatAssert.assertAlive(ctx.getStore(), defender);
+
+    triggerCombat(ctx, attacker, defender);
+    ctx.waitTicks(20);
+
+    // At least one should be damaged
+    Object store = ctx.getStore();
+    boolean anyDamaged =
+        isHealthReduced(store, attacker) ||
+        isHealthReduced(store, defender);
+    HytaleAssert.assertTrue("At least one entity should be damaged", anyDamaged);
+}
+```
+  </Accordion>
+  <Accordion title="Timed flow (verify something happens within N ticks)">
+Use `awaitCondition` to verify time-bounded behavior.
+
+```java
+@FlowTest(timeoutTicks = 400)
+void timedFlow(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+
+    applyPoisonEffect(ctx, entity);
+
+    // Poison should reduce health within 100 ticks
+    Float reducedHealth = ctx.awaitCondition(
+        () -> {
+            float health = getHealth(ctx.getStore(), entity);
+            return health < getMaxHealth(ctx.getStore(), entity) ? health : null;
+        },
+        100,
+        "Poison should reduce health within 100 ticks"
+    );
+
+    HytaleAssert.assertNotNull(reducedHealth);
+    ctx.log("Health reduced to %.1f by poison.", reducedHealth);
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Tip>
+Keep flow tests focused on one scenario. A flow that tests spawning, combat, looting, crafting, and trading in a single method is hard to debug when it fails. Split it into smaller, targeted flows.
+</Tip>
+
+### Use descriptive logging
+
+Call `ctx.log()` at each major step. When a flow fails, the logs help you identify exactly where things went wrong.
+
+```java
+ctx.log("Step 1: Spawning entity...");
+ctx.log("Step 2: Applying damage...");
+ctx.log("Step 3: Waiting for death...");
+```
+
+### Prefer awaitCondition over fixed waitTicks
+
+Fixed tick waits are fragile - they may be too short on slow servers or unnecessarily long on fast ones. `awaitCondition` adapts automatically.
+
+```java
+// Fragile
+ctx.waitTicks(50);
+StatsAssert.assertDead(store, entity);
+
+// Robust
+ctx.awaitCondition(
+    () -> isEntityDead(store, entity) ? true : null,
+    100, "Entity should die"
+);
+```
+
+### Use @Order for dependent flows
+
+If flow tests in the same suite depend on each other (not recommended, but sometimes necessary), use `@Order` to enforce execution sequence.
+
+### Set appropriate timeoutTicks
+
+Calculate the maximum expected duration of your flow and add a safety margin. At 30 TPS:
+- 100 ticks = ~3.3 seconds
+- 200 ticks = 10 seconds
+- 600 ticks = 30 seconds
+
+<Warning>
+Setting `timeoutTicks` too low will cause false failures on loaded servers. Setting it too high will make failed tests take a long time to report. Aim for 2-3x the expected duration.
+</Warning>
+
+## Next Steps
+
+- [Flow: Spawn-Kill-Loot](/flows/spawn-kill-loot) - complete worked example
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - tick-waiting primitives
+- [Isolation: DEDICATED_WORLD](/isolation/dedicated-world) - world isolation details

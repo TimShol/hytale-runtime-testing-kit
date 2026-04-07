@@ -1,0 +1,115 @@
+---
+title: "Chat"
+description: "Test chat message content and broadcasting."
+---
+
+The Chat surface lets you assert on captured chat message strings and broadcast messages to the server. `ChatAssert` provides content checks that operate on raw strings (no reflection needed), while `ChatTestAdapter` handles message broadcasting through the Universe API.
+
+Chat testing is useful when your mod implements chat commands, message formatting, chat filters, or automated announcements. These tests verify that messages contain the expected content and that broadcasting reaches the server without errors.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.ChatAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Chat Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("chat")
+public class ChatSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Message contains expected keyword")
+    void messageContainsKeyword() {
+        String captured = "Welcome to the Hytale server!";
+
+        // assertMessageContains checks for a substring match.
+        ChatAssert.assertMessageContains(captured, "Welcome");
+        ChatAssert.assertMessageContains(captured, "Hytale");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Non-empty message passes check")
+    void nonEmptyMessagePasses() {
+        String captured = "Player joined the game";
+
+        // assertMessageNotEmpty fails if the string is null or empty.
+        ChatAssert.assertMessageNotEmpty(captured);
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Empty message is detected")
+    void emptyMessageDetected() {
+        String captured = "";
+
+        // This is a negative test - verify that empty messages are caught.
+        HytaleAssert.assertTrue(
+            "Empty string should have length 0",
+            captured.isEmpty()
+        );
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Chat event class is available on the classpath")
+    void chatEventClassAvailable() {
+        // chatEventClassAvailable checks if PlayerChatEvent exists.
+        // If this fails, chat event testing will not work.
+        HytaleAssert.assertTrue(
+            "PlayerChatEvent class should be available",
+            ChatTestAdapter.chatEventClassAvailable()
+        );
+    }
+
+    @HytaleTest
+    @Order(5)
+    @DisplayName("Broadcast message succeeds")
+    void broadcastMessageSucceeds() {
+        // broadcastMessage sends a message to all players via the Universe API.
+        // Returns true on success, false if the API is unavailable.
+        boolean sent = ChatTestAdapter.broadcastMessage("Test broadcast from HRTK");
+        HytaleAssert.assertTrue("Broadcast should succeed", sent);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `broadcastMessage(String message)` | `boolean` | Broadcast a message to all players via the Universe API |
+| `chatEventClassAvailable()` | `boolean` | Check if the PlayerChatEvent class is on the classpath |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertMessageContains(String message, String expected)` | "Expected message to contain '[expected]' but was '[message]'" |
+| `assertMessageNotEmpty(String message)` | "Expected message to be non-empty but it was empty" |
+
+## When to Test Chat
+
+Chat tests are most useful when:
+
+- Your mod formats chat messages (colors, prefixes, player ranks)
+- You implement chat filters or censorship systems
+- You have automated announcements that fire on events
+- You need to verify that broadcast messages reach the Universe API
+
+`ChatAssert` works on plain strings, so capture messages via event hooks or test interceptors, then pass them to the assertions.
+
+## Next Steps
+
+- [Events](/surfaces/events) - capture chat events
+- [Commands](/surfaces/commands) - test command output messages
+- [Players](/surfaces/players) - mock player chat interactions

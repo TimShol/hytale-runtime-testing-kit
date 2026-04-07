@@ -1,0 +1,92 @@
+---
+title: "Weather"
+description: "Test weather state and forced weather configuration."
+---
+
+The Weather surface provides methods for reading and setting the current weather in a world, along with assertions to verify weather state. Use `WeatherTestAdapter` to control weather and `WeatherAssert` to check it.
+
+Weather testing is important when your mod has weather-dependent logic - damage modifiers during storms, visibility changes in fog, or mob spawning rules that differ by weather type. Automated tests verify these weather-dependent behaviors without waiting for natural weather cycles.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.WeatherAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Weather Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("weather")
+public class WeatherSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Set weather to rain and verify it changed")
+    void setWeatherToRain(WorldTestContext ctx) {
+        // setWeather forces the world weather to the given type.
+        ctx.setWeather("rain");
+        ctx.waitTicks(1);
+
+        WeatherAssert.assertWeather(ctx.getWorld(), "rain");
+        WeatherAssert.assertNotWeather(ctx.getWorld(), "clear");
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Switch weather from rain to clear")
+    void switchWeatherToClear(WorldTestContext ctx) {
+        ctx.setWeather("rain");
+        ctx.waitTicks(1);
+        WeatherAssert.assertWeather(ctx.getWorld(), "rain");
+
+        // Switch to clear and verify.
+        ctx.setWeather("clear");
+        ctx.waitTicks(1);
+        WeatherAssert.assertWeather(ctx.getWorld(), "clear");
+        WeatherAssert.assertNotWeather(ctx.getWorld(), "rain");
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Set weather to snow and verify")
+    void setWeatherToSnow(WorldTestContext ctx) {
+        ctx.setWeather("snow");
+        ctx.waitTicks(1);
+
+        WeatherAssert.assertWeather(ctx.getWorld(), "snow");
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `getWeather` | `Object world` | `String` | Get the current weather type for the world |
+| `setWeather` | `String weatherType` | `void` | Force the world weather to the given type |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertWeather` | `Object world, String expected` | "Expected weather [expected] but was [actual]" |
+| `assertNotWeather` | `Object world, String weatherType` | "Expected weather to not be [weatherType]" |
+
+## Key Details
+
+- Weather changes may take **one tick to propagate** - always call `ctx.waitTicks(1)` after `setWeather` before asserting.
+- Use `IsolationStrategy.DEDICATED_WORLD` to avoid changing weather on the live server during tests.
+- Weather type strings are server-defined. Common values include `"clear"`, `"rain"`, and `"snow"`.
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - entity spawning and block operations
+- [Effects](/surfaces/effects) - weather may interact with status effects
+- [Scheduling](/surfaces/scheduling) - world tick management

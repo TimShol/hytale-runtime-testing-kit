@@ -1,0 +1,113 @@
+---
+title: "Flow Tests Overview"
+description: "What flow tests are, why they matter, and how tick-waiting enables multi-step integration testing."
+---
+
+Flow tests are multi-step integration tests that exercise a complete gameplay sequence across multiple server ticks. They are the closest thing to "playing through a scenario" that you can automate in HRTK.
+
+## What Is a Flow Test?
+
+A flow test simulates a sequence of game events and verifies the outcome at each stage. For example:
+
+1. **Spawn** an entity in the world
+2. **Wait** for ECS processors to initialize it
+3. **Apply damage** to trigger combat logic
+4. **Wait** for the entity to die
+5. **Verify** loot drops
+
+Each step may require one or more server ticks to take effect. Flow tests use `waitTicks()` and `awaitCondition()` to synchronize with the server's tick loop.
+
+## @FlowTest
+
+The `@FlowTest` annotation is a shorthand for `@HytaleTest` + `@Tag("flow")` with built-in world context and tick timeout:
+
+```java
+import com.frotty27.hrtk.api.annotation.FlowTest;
+
+@FlowTest(timeoutTicks = 200)
+void spawnAndKill(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+
+    killEntity(ctx, entity);
+    ctx.waitTicks(5);
+
+    StatsAssert.assertDead(ctx.getStore(), entity);
+}
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `world` | `""` | World name (empty = test world) |
+| `timeoutTicks` | 200 | Max ticks before timeout (~6.7 seconds at 30 TPS) |
+
+## Why Tick Waiting Matters
+
+Hytale's game loop runs in discrete ticks. When you call `ctx.spawnEntity()`, the entity is created but not fully set up yet. Components like health, stats, position, and effects are added by the game loop on the following ticks.
+
+Without tick waiting:
+```java
+Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+StatsAssert.assertAlive(ctx.getStore(), entity); // FAILS -- no stats yet
+```
+
+With tick waiting:
+```java
+Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+ctx.waitTicks(1);
+StatsAssert.assertAlive(ctx.getStore(), entity); // PASSES
+```
+
+## Flow Test Structure
+
+A well-structured flow test follows this pattern:
+
+```java
+@FlowTest(timeoutTicks = 200)
+void myFlowTest(WorldTestContext ctx) {
+    // 1. SETUP -- spawn entities, place blocks
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+
+    // 2. ACTION -- trigger the behavior you're testing
+    triggerAction(ctx, entity);
+
+    // 3. WAIT -- let the server process the action
+    ctx.waitTicks(5);
+
+    // 4. ASSERT -- verify the expected outcome
+    HytaleAssert.assertTrue(expectedResult(ctx, entity));
+
+    // 5. (Optional) SECONDARY ACTION + ASSERT
+    triggerSecondAction(ctx, entity);
+    ctx.waitTicks(3);
+    HytaleAssert.assertTrue(secondExpectedResult(ctx, entity));
+}
+```
+
+<Tip>
+Use `awaitCondition()` instead of fixed `waitTicks()` when you do not know exactly how many ticks an action will take. It polls every tick and returns as soon as the condition is met, making your tests both faster and more reliable.
+</Tip>
+
+## Isolation for Flow Tests
+
+Flow tests almost always mutate world state. Use `IsolationStrategy.DEDICATED_WORLD`:
+
+```java
+@HytaleSuite(value = "Combat Flows", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("flow")
+public class CombatFlows {
+    // All flow tests run in a temporary void world
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Spawn-Kill-Loot Flow" icon="skull" href="/flows/spawn-kill-loot">
+    A complete flow example: spawn, tier, kill, and verify loot drops.
+  </Card>
+  <Card title="Writing Custom Flows" icon="pen" href="/flows/writing-custom-flows">
+    How to structure your own multi-step flow tests.
+  </Card>
+</CardGroup>

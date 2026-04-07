@@ -1,0 +1,155 @@
+---
+title: "Spawn-Kill-Loot Flow"
+description: "Complete flow test example: spawn an entity, verify its tier, kill it, and verify loot drops."
+---
+
+This page walks through a complete flow test that exercises the spawn-combat-loot pipeline. It demonstrates how to chain multiple steps with tick waiting and assert at each stage.
+
+## The Scenario
+
+1. Spawn a creature in a dedicated test world
+2. Wait for it to initialize (health, stats, effects)
+3. Verify it is alive and at the correct tier
+4. Apply lethal damage
+5. Wait for death processing
+6. Collect and verify loot drops
+
+## Full Example
+
+```java
+import com.frotty27.hrtk.api.annotation.*;
+import com.frotty27.hrtk.api.assert_.*;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.util.List;
+
+@HytaleSuite(value = "Spawn-Kill-Loot Flow", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("flow")
+public class SpawnKillLootFlow {
+
+    @FlowTest(timeoutTicks = 300)
+    @DisplayName("Kweebec spawn -> verify alive -> kill -> verify loot")
+    void fullKweebecFlow(WorldTestContext ctx) {
+
+        // ── Step 1: Spawn ──
+        ctx.log("Spawning kweebec at (0, 64, 0)...");
+        Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        HytaleAssert.assertNotNull("Entity ref must not be null", entity);
+
+        // ── Step 2: Wait for initialization ──
+        ctx.waitTicks(2);
+        HytaleAssert.assertTrue("Entity must exist after spawn",
+                                 ctx.entityExists(entity));
+
+        // ── Step 3: Verify alive and stats ──
+        Object store = ctx.getStore();
+        StatsAssert.assertAlive(store, entity);
+        StatsAssert.assertHealthAtMax(store, entity);
+        ctx.log("Entity is alive with full health.");
+
+        // ── Step 4: Apply lethal damage ──
+        ctx.log("Applying lethal damage...");
+        applyLethalDamage(ctx, entity);
+
+        // ── Step 5: Wait for death ──
+        Boolean died = ctx.awaitCondition(
+            () -> isEntityDead(store, entity) ? true : null,
+            100,
+            "Entity should die within 100 ticks"
+        );
+        HytaleAssert.assertNotNull("Entity should have died", died);
+        StatsAssert.assertDead(store, entity);
+        ctx.log("Entity confirmed dead.");
+
+        // ── Step 6: Verify loot ──
+        List<?> drops = ctx.awaitCondition(
+            () -> collectNearbyDrops(ctx, 0, 64, 0),
+            60,
+            "Loot should drop within 60 ticks after death"
+        );
+        LootAssert.assertDropsContain(drops, "kweebec_hide");
+        LootAssert.assertDropCountBetween(drops, 1, 5);
+        ctx.log("Loot verified: %d drop stacks found.", drops.size());
+    }
+
+    // ── Helper methods ──
+
+    private void applyLethalDamage(WorldTestContext ctx, Object entity) {
+        // Your game logic for applying damage
+        // This would use your mod's damage system or direct stat manipulation
+    }
+
+    private boolean isEntityDead(Object store, Object entity) {
+        try {
+            StatsAssert.assertDead(store, entity);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private List<?> collectNearbyDrops(WorldTestContext ctx, int x, int y, int z) {
+        // Your logic to find dropped item entities near the given position
+        // Return null if no drops found yet (awaitCondition polls until non-null)
+        return null; // placeholder
+    }
+}
+```
+
+## Step-by-Step Breakdown
+
+<Steps>
+  <Step title="Spawn">
+    `ctx.spawnEntity()` creates the entity in the command buffer. The reference is immediately returned, but the entity is not yet fully initialized.
+  </Step>
+  <Step title="Wait for Init">
+    `ctx.waitTicks(2)` lets the world tick twice, allowing ECS processors to initialize health, stats, and transform components.
+  </Step>
+  <Step title="Verify Alive">
+    `StatsAssert.assertAlive()` checks that health is above zero and no `DeathComponent` is present. `assertHealthAtMax()` confirms full health.
+  </Step>
+  <Step title="Apply Damage">
+    Your damage logic executes. This may set health to zero, apply a `DeathComponent`, or trigger other processors.
+  </Step>
+  <Step title="Await Death">
+    `ctx.awaitCondition()` polls every tick. As soon as the entity has a `DeathComponent`, it returns. If 100 ticks pass without death, the test fails.
+  </Step>
+  <Step title="Collect Loot">
+    Another `awaitCondition()` waits for loot entities to appear near the death location. Once found, `LootAssert` verifies the expected items.
+  </Step>
+</Steps>
+
+## Parameterized Flow
+
+Test the same flow across multiple creature types:
+
+```java
+@ParameterizedTest
+@ValueSource(strings = {"Kweebec_Sapling", "Trork_Warrior", "Outlander_Hunter"})
+@FlowTest(timeoutTicks = 300)
+void flowForCreatureType(String creatureId, WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity(creatureId, 0, 64, 0);
+    ctx.waitTicks(2);
+
+    StatsAssert.assertAlive(ctx.getStore(), entity);
+
+    applyLethalDamage(ctx, entity);
+    ctx.awaitCondition(
+        () -> isEntityDead(ctx.getStore(), entity) ? true : null,
+        100, creatureId + " should die"
+    );
+
+    ctx.log("%s flow completed successfully.", creatureId);
+}
+```
+
+<Tip>
+Parameterized flows are powerful for regression testing across all entity types. If a content update breaks one creature's loot table, the parameterized test will catch it.
+</Tip>
+
+## Next Steps
+
+- [Writing Custom Flows](/flows/writing-custom-flows) - structure your own flow tests
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - tick-waiting primitives
+- [Inventory & Loot](/surfaces/inventory-and-loot) - loot assertion details

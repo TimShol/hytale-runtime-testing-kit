@@ -1,0 +1,6 @@
+<svg viewBox="0 0 120 24" xmlns="http://www.w3.org/2000/svg">
+  <text x="0" y="18" font-family="monospace" font-size="21" font-weight="500" fill="#3B82F6">&lt;</text>
+  <polyline points="13,13 17,16.8 24,8.05" stroke="#22C55E" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="27" y="18" font-family="monospace" font-size="21" font-weight="500" fill="#3B82F6">&gt;</text>
+  <text x="42" y="18" font-family="monospace" font-size="18" font-weight="500" fill="#F1F5F9">HRTK</text>
+</svg>

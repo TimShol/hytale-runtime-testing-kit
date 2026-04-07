@@ -1,0 +1,172 @@
+---
+title: "Parameterized Tests"
+description: "Run the same test logic with multiple input values using @ParameterizedTest and @ValueSource."
+---
+
+Parameterized tests let you run the same test method multiple times with different arguments. Instead of duplicating test methods for each input, declare the values once and let HRTK iterate over them.
+
+## Basic Usage
+
+Annotate your method with `@ParameterizedTest` and provide values via `@ValueSource`. The first parameter of your method receives each value in turn.
+
+```java
+import com.frotty27.hrtk.api.annotation.ParameterizedTest;
+import com.frotty27.hrtk.api.annotation.ValueSource;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+
+@HytaleSuite("Tier Validation Tests")
+public class TierTests {
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5})
+    void tierShouldBePositive(int tier) {
+        HytaleAssert.assertGreaterThan(0, tier);
+    }
+}
+```
+
+This generates five test executions, each reported separately in the output:
+
+```
+    [PASS] tierShouldBePositive [0] 1 (1ms)
+    [PASS] tierShouldBePositive [1] 2 (0ms)
+    [PASS] tierShouldBePositive [2] 3 (0ms)
+    [PASS] tierShouldBePositive [3] 4 (1ms)
+    [PASS] tierShouldBePositive [4] 5 (0ms)
+```
+
+## Supported Value Types
+
+`@ValueSource` supports six primitive array types. Set exactly one array field per annotation.
+
+<AccordionGroup>
+  <Accordion title="ints">
+```java
+@ParameterizedTest
+@ValueSource(ints = {0, 1, 10, 100, Integer.MAX_VALUE})
+void testIntValues(int value) {
+    HytaleAssert.assertTrue(value >= 0);
+}
+```
+  </Accordion>
+  <Accordion title="strings">
+```java
+@ParameterizedTest
+@ValueSource(strings = {"wood_sword", "stone_sword", "iron_sword"})
+void testItemIdFormat(String itemId) {
+    HytaleAssert.assertMatches("[a-z_]+", itemId);
+}
+```
+  </Accordion>
+  <Accordion title="doubles">
+```java
+@ParameterizedTest
+@ValueSource(doubles = {0.0, 0.5, 1.0, 99.9})
+void testDamageMultiplier(double multiplier) {
+    HytaleAssert.assertTrue(multiplier >= 0.0);
+    HytaleAssert.assertTrue(multiplier <= 100.0);
+}
+```
+  </Accordion>
+  <Accordion title="longs">
+```java
+@ParameterizedTest
+@ValueSource(longs = {1L, 1000L, 1_000_000L})
+void testTickCounts(long ticks) {
+    HytaleAssert.assertGreaterThan(0L, ticks);
+}
+```
+  </Accordion>
+  <Accordion title="floats">
+```java
+@ParameterizedTest
+@ValueSource(floats = {0.1f, 0.5f, 1.0f})
+void testHealthPercentages(float pct) {
+    HytaleAssert.assertTrue(pct > 0f);
+    HytaleAssert.assertTrue(pct <= 1f);
+}
+```
+  </Accordion>
+  <Accordion title="booleans">
+```java
+@ParameterizedTest
+@ValueSource(booleans = {true, false})
+void testToggleState(boolean enabled) {
+    // Test logic that varies by boolean state
+    HytaleAssert.assertNotNull(enabled);
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Combining with Context Injection
+
+The parameterized value is always the **first** parameter. Additional parameters are injected by HRTK as usual.
+
+```java
+@ParameterizedTest
+@ValueSource(strings = {"Kweebec_Sapling", "Trork_Warrior"})
+void testEntitySpawnByType(String entityTypeId, WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity(entityTypeId, 0, 64, 0);
+    HytaleAssert.assertNotNull("Entity should spawn: " + entityTypeId, entity);
+    HytaleAssert.assertTrue(ctx.entityExists(entity));
+}
+```
+
+<Note>
+The parameterized value must be the first parameter in the method signature. Context types (`TestContext`, `WorldTestContext`, etc.) must come after.
+</Note>
+
+## How Results Are Reported
+
+Each parameter value produces a separate `TestResult` with a display name that includes the index and value:
+
+```
+testName [index] value
+```
+
+For example:
+```
+    [PASS] testItemIdFormat [0] wood_sword (1ms)
+    [PASS] testItemIdFormat [1] stone_sword (0ms)
+    [FAIL] testItemIdFormat [2] iron_sword (1ms)
+```
+
+If `--fail-fast` is set and one parameterized invocation fails, the remaining values are skipped.
+
+## Practical Example: Tier Damage Scaling
+
+```java
+@HytaleSuite("Damage Scaling Tests")
+@Tag("combat")
+public class DamageScalingTests {
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5})
+    void tierDamageShouldScale(int tier) {
+        float expectedMinDamage = tier * 2.0f;
+        float expectedMaxDamage = tier * 5.0f;
+
+        float actualDamage = calculateDamageForTier(tier);
+
+        HytaleAssert.assertTrue(
+            String.format("Tier %d damage (%.1f) should be >= %.1f", tier, actualDamage, expectedMinDamage),
+            actualDamage >= expectedMinDamage
+        );
+        HytaleAssert.assertTrue(
+            String.format("Tier %d damage (%.1f) should be <= %.1f", tier, actualDamage, expectedMaxDamage),
+            actualDamage <= expectedMaxDamage
+        );
+    }
+
+    private float calculateDamageForTier(int tier) {
+        return tier * 3.5f; // placeholder
+    }
+}
+```
+
+## Next Steps
+
+- [Timeouts & Repetition](/writing-tests/timeouts-and-repetition) - repeat tests and set time limits
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - handle tick-based timing
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - run parameterized tests by tag

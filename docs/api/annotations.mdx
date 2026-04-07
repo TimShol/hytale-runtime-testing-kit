@@ -1,0 +1,107 @@
+---
+title: "Annotations Reference"
+description: "Complete table of all 26 HRTK annotations with descriptions and links."
+---
+
+HRTK provides 26 annotations across the `com.frotty27.hrtk.api.annotation` package. This page is a quick-reference table with brief descriptions and links to the relevant documentation.
+
+## Test Markers
+
+These annotations mark methods as tests or benchmarks. At least one must be present for HRTK to discover the method. All test marker annotations listed below are fully recognized by the discovery engine - any method annotated with one of these will be discovered and executed.
+
+| Annotation | Target | Description | Docs |
+|---|---|---|---|
+| `@HytaleTest` | Method | Primary test marker. Optional display name parameter. | [Your First Test](/writing-tests/your-first-test) |
+| `@EcsTest` | Method | ECS-level test. Injects `EcsTestContext`, adds `"ecs"` tag. | [ECS Testing](/surfaces/ecs) |
+| `@WorldTest` | Method | World-level test. Injects `WorldTestContext`, adds `"integration"` tag. | [World Testing](/surfaces/world) |
+| `@CombatTest` | Method | Combat test. Provides `WorldTestContext` for combat scenarios. | [Stats & Combat](/surfaces/stats-and-combat) |
+| `@StatsTest` | Method | Stats-focused test. Marker for stat-related testing. | [Stats & Combat](/surfaces/stats-and-combat) |
+| `@InventoryTest` | Method | Inventory test. Marker for inventory-related testing. | [Inventory & Loot](/surfaces/inventory-and-loot) |
+| `@SpawnTest` | Method | Spawn test. Marker for entity spawning scenarios. | [World Testing](/surfaces/world) |
+| `@FlowTest` | Method | Multi-step flow test. `world` and `timeoutTicks` parameters. | [Flow Tests](/flows/overview) |
+| `@AsyncTest` | Method | Async test with `timeoutTicks` for tick-based timeout. Fully recognized as a test marker by the discovery engine. | [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) |
+| `@Benchmark` | Method | Performance benchmark. `warmup`, `iterations`, `batchSize`. | [Benchmarks](/surfaces/benchmarks) |
+| `@RepeatedTest` | Method | Run N times. Each repetition reported separately. | [Timeouts & Repetition](/writing-tests/timeouts-and-repetition) |
+| `@ParameterizedTest` | Method | Run with multiple values from `@ValueSource`. | [Parameterized Tests](/writing-tests/parameterized-tests) |
+
+## Configuration
+
+These annotations configure how tests behave.
+
+| Annotation | Target | Description | Docs |
+|---|---|---|---|
+| `@HytaleSuite` | Class | Suite marker. `value` (name), `isolation` (strategy). | [Test Suites](/writing-tests/test-suites) |
+| `@Tag` | Class/Method | String tag(s) for filtering. Multiple values supported. | [Filtering & Tags](/writing-tests/filtering-and-tags) |
+| `@Order` | Method | Execution order within suite. Lower values run first. | [Filtering & Tags](/writing-tests/filtering-and-tags) |
+| `@DisplayName` | Method | Override the display name in results. | [Filtering & Tags](/writing-tests/filtering-and-tags) |
+| `@Disabled` | Class/Method | Skip the test/suite. Optional reason string. | [Filtering & Tags](/writing-tests/filtering-and-tags) |
+| `@Timeout` | Method | Maximum duration. `value` + `unit` (default seconds). | [Timeouts & Repetition](/writing-tests/timeouts-and-repetition) |
+| `@ValueSource` | Method | Parameter values for `@ParameterizedTest`. `ints`, `strings`, `doubles`, etc. | [Parameterized Tests](/writing-tests/parameterized-tests) |
+
+## Requirements
+
+These annotations declare preconditions for test execution.
+
+| Annotation | Target | Description | Docs |
+|---|---|---|---|
+| `@RequiresWorld` | Method | Test needs a world. Optional `value` for world name. | [World Testing](/surfaces/world) |
+| `@RequiresPlayer` | Method | Test needs player-like context. Optional `count`. | [Command Testing](/surfaces/commands) |
+| `@RequiresPlugin` | Method | Test needs a specific plugin loaded. Skipped if absent. | [How It Works](/how-it-works) |
+
+## Lifecycle
+
+These annotations mark setup and teardown methods.
+
+| Annotation | Target | Description | Docs |
+|---|---|---|---|
+| `@BeforeAll` | Method | Run once before the first test. Can be static. | [Lifecycle Hooks](/writing-tests/lifecycle-hooks) |
+| `@AfterAll` | Method | Run once after the last test. Can be static. | [Lifecycle Hooks](/writing-tests/lifecycle-hooks) |
+| `@BeforeEach` | Method | Run before every test method. Instance method. | [Lifecycle Hooks](/writing-tests/lifecycle-hooks) |
+| `@AfterEach` | Method | Run after every test method. Instance method. | [Lifecycle Hooks](/writing-tests/lifecycle-hooks) |
+
+## Usage Pattern
+
+A typical test class uses a combination of these annotations:
+
+```java
+@HytaleSuite(value = "My Tests", isolation = IsolationStrategy.SNAPSHOT)
+@Tag("ecs")
+public class MyTests {
+
+    @BeforeAll
+    static void setup() { }
+
+    @BeforeEach
+    void resetState() { }
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Component attaches correctly")
+    void testComponentAttach(EcsTestContext ctx) { }
+
+    @EcsTest
+    @Order(2)
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void testFastQuery(EcsTestContext ctx) { }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    void testTiers(int tier) { }
+
+    @HytaleTest
+    @Disabled("Not yet implemented")
+    void testFutureFeature() { }
+
+    @AfterEach
+    void cleanup() { }
+
+    @AfterAll
+    static void teardown() { }
+}
+```
+
+## Next Steps
+
+- [Contexts Reference](/api/contexts) - context interfaces and their methods
+- [Your First Test](/writing-tests/your-first-test) - getting started
+- [How It Works](/how-it-works) - architecture overview

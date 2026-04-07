@@ -1,0 +1,206 @@
+---
+title: "World Testing"
+description: "Test world state, block operations, entity spawning, and positioning with WorldAssert and WorldTestContext."
+---
+
+World tests operate on a Hytale world instance, letting you spawn entities, place blocks, move objects, and verify world state. The `WorldTestContext` provides direct access to the world, its ECS store, block operations, and tick-waiting primitives.
+
+World testing is where ECS meets the game world. While ECS tests work with raw entities and components, world tests verify that entities spawn at the right coordinates, blocks are placed correctly, and the world ticks forward as expected.
+
+<Note>
+Entity type names and block IDs used in examples (like `Kweebec`, `Soil_Dirt`) are from Hytale's default content. Replace them with your mod's actual entity roles and block type IDs. The `spawnEntity` method tries NPCPlugin first and falls back to an empty entity if the role is not found. Block IDs use the asset name without a namespace prefix.
+</Note>
+
+## Isolation Strategies for World Tests
+
+World tests modify shared state - blocks, entities, positions. Without isolation, your tests could corrupt the live server or interfere with each other. HRTK provides two strategies:
+
+- **DEDICATED_WORLD** - Each suite gets a temporary void world that is destroyed after the suite. This is the recommended default for any test that places blocks or spawns entities.
+- **SNAPSHOT** - The world state is captured before the suite and restored after. Useful when you need to test against existing world content.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.WorldAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "World Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("world")
+public class WorldSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Spawn a Trork_Warrior at specific coordinates")
+    void spawnEntityAtPosition(WorldTestContext ctx) {
+        // Spawn a Trork_Warrior at coordinates (10, 64, 10).
+        // spawnNPC uses the NPCPlugin to create a fully initialized entity
+        // with all components defined for that role (health, AI, model, etc.).
+        Object entity = ctx.spawnNPC("Trork_Warrior", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        HytaleAssert.assertNotNull("Entity reference should not be null", entity);
+        HytaleAssert.assertTrue(
+            "Entity should exist in the world after spawning",
+            ctx.entityExists(entity)
+        );
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Verify entity spawns at the correct position")
+    void entityPositionMatchesSpawnCoordinates(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 25, 64, 30);
+        ctx.waitTicks(1);
+
+        // getPosition returns a double array [x, y, z].
+        // We use a tolerance of 0.5 because the entity may settle slightly
+        // due to physics (gravity, ground snapping).
+        double[] pos = ctx.getPosition(entity);
+        HytaleAssert.assertNotNull("Position should not be null", pos);
+        HytaleAssert.assertEquals(25.0, pos[0], 0.5);
+        HytaleAssert.assertEquals(64.0, pos[1], 0.5);
+        HytaleAssert.assertEquals(30.0, pos[2], 0.5);
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Set entity position and verify it moved")
+    void setPositionMovesEntity(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        // Teleport the entity to a new position.
+        ctx.setPosition(entity, 100, 70, 100);
+        ctx.waitTicks(1);
+
+        double[] pos = ctx.getPosition(entity);
+        HytaleAssert.assertEquals(100.0, pos[0], 0.5);
+        HytaleAssert.assertEquals(70.0, pos[1], 0.5);
+        HytaleAssert.assertEquals(100.0, pos[2], 0.5);
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Place a block and verify its type")
+    void setAndGetBlock(WorldTestContext ctx) {
+        // setBlock places a block at the given coordinates.
+        // The type ID is the block's asset name without a namespace prefix.
+        ctx.setBlock(5, 64, 5, "Rock_Sandstone");
+
+        WorldAssert.assertBlockAt(ctx.getWorld(), 5, 64, 5, "Rock_Sandstone");
+        WorldAssert.assertBlockNotAt(ctx.getWorld(), 5, 64, 5, "Empty");
+    }
+
+    @WorldTest
+    @Order(5)
+    @DisplayName("Fill a region to build a flat arena floor")
+    void fillRegionBuildsArena(WorldTestContext ctx) {
+        // fillRegion batches all block placements into a single world-thread dispatch.
+        // This is ideal for setting up test arenas - the entire floor is placed
+        // atomically in one tick, so you can assert immediately after.
+        ctx.fillRegion(0, 60, 0, 20, 60, 20, "Rock_Sandstone");
+
+        // Spot-check corners and center to confirm the fill worked.
+        WorldAssert.assertBlockAt(ctx.getWorld(), 0, 60, 0, "Rock_Sandstone");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 20, 60, 20, "Rock_Sandstone");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 10, 60, 10, "Rock_Sandstone");
+    }
+
+    @WorldTest
+    @Order(6)
+    @DisplayName("Despawn entity and verify removal")
+    void despawnedEntityNoLongerExists(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 0, 64, 0);
+        ctx.waitTicks(1);
+        HytaleAssert.assertTrue("Entity should exist before despawn", ctx.entityExists(entity));
+
+        ctx.despawn(entity);
+        ctx.waitTicks(1);
+
+        HytaleAssert.assertFalse(
+            "Entity should not exist after despawn",
+            ctx.entityExists(entity)
+        );
+    }
+
+    @WorldTest
+    @Order(7)
+    @DisplayName("World tick advances correctly with waitTicks")
+    void worldTickAdvances(WorldTestContext ctx) {
+        // waitTicks blocks the test thread until N world ticks have elapsed.
+        // This is essential for testing time-dependent behavior.
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 5, 64, 5);
+        ctx.waitTicks(10);
+
+        // After 10 ticks, the entity should still exist and the world should be alive.
+        HytaleAssert.assertTrue("Entity should persist across ticks", ctx.entityExists(entity));
+    }
+}
+```
+
+## WorldTestContext Methods
+
+| Category | Method | Description |
+|---|---|---|
+| **World** | `getWorld()` | Get the Hytale World object |
+| **Store** | `getStore()` | Get the entity store |
+| | `getCommandBuffer()` | Get a command buffer for deferred ops |
+| | `flush()` | Execute deferred command buffer operations |
+| **Blocks** | `setBlock(x, y, z, typeId)` | Set a block at coordinates |
+| | `getBlock(x, y, z)` | Get the block type ID at coordinates |
+| | `fillRegion(x1, y1, z1, x2, y2, z2, typeId)` | Fill a region with blocks (batched in a single world-thread dispatch) |
+| **Entities** | `spawnEntity(typeId)` | Spawn typed entity at origin (uses NPCPlugin if available) |
+| | `spawnEntity(typeId, x, y, z)` | Spawn typed entity at position (uses NPCPlugin if available) |
+| | `spawnNPC(role, x, y, z)` | Spawn a fully initialized NPC by role name |
+| | `spawnNPC(role, variant, x, y, z)` | Spawn NPC with a specific variant |
+| | `putComponent(ref, type, comp)` | Attach component to entity |
+| | `removeComponent(ref, type)` | Remove component from entity |
+| | `entityExists(ref)` | Check if reference is still valid |
+| | `despawn(ref)` | Remove entity from world |
+| **Position** | `getPosition(ref)` | Get entity position as `[x, y, z]` |
+| | `setPosition(ref, x, y, z)` | Set entity position |
+| **Ticks** | `waitTicks(n)` | Block until N ticks elapse |
+| | `waitTicksAsync(n)` | Non-blocking tick wait |
+| | `awaitCondition(supplier, maxTicks)` | Poll each tick until non-null |
+| **Queries** | `findEntities(componentType)` | Find entities with component |
+| | `countEntities(componentType)` | Count entities with component |
+| | `getComponent(ref, type)` | Get component (null if absent) |
+| | `hasComponent(ref, type)` | Check if entity has component |
+
+## WorldAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertBlockAt(world, x, y, z, typeId)` | Assert block at position is expected type |
+| `assertBlockNotAt(world, x, y, z, typeId)` | Assert block is NOT the given type |
+| `assertEntityInWorld(world, ref)` | Assert entity exists in world |
+| `assertWorldExists(worldName)` | Assert a named world exists |
+
+## Entity Spawning: spawnEntity vs spawnNPC
+
+When you call `spawnEntity(typeId)` or `spawnEntity(typeId, x, y, z)`, HRTK first attempts to spawn a fully typed entity using `NPCPlugin.spawnNPC()`. This produces an entity with all the components and behaviors defined for that NPC type (health, AI, model, etc.). If the NPCPlugin call fails or the type is not recognized, HRTK falls back to creating an empty entity with no components attached.
+
+When you call `spawnNPC(role, x, y, z)`, HRTK directly invokes `NPCPlugin.spawnNPC()` with the role name. This always produces a fully initialized NPC or fails explicitly - there is no fallback to an empty entity.
+
+<Tip>
+For tests that need a fully initialized entity (with health, AI, and other NPC components), prefer `spawnNPC("Kweebec_Sapling", ...)` over `spawnEntity(...)`. The NPC path is more explicit and gives clearer error messages when spawning fails.
+</Tip>
+
+## fillRegion Performance
+
+`fillRegion()` batches all block placements into a single world-thread dispatch. This means the entire region is filled atomically within one tick, rather than issuing separate block placements per coordinate. This makes large fills significantly faster and ensures the region is consistent when you assert against it.
+
+## Next Steps
+
+- [ECS Testing](/surfaces/ecs) - lower-level entity/component operations
+- [Stats & Combat](/surfaces/stats-and-combat) - health and damage verification
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - tick-based timing

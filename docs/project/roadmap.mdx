@@ -1,0 +1,85 @@
+---
+title: "Roadmap"
+description: "Future plans for HRTK: block read/write improvements, entity type spawning, benchmark comparison, and more."
+---
+
+HRTK is actively developed alongside the Hytale server. This roadmap outlines planned features and improvements. Priorities may shift as the server API evolves.
+
+## Near-Term
+
+Features planned for the next release cycle.
+
+<CardGroup cols={2}>
+  <Card title="Block Read/Write Improvements" icon="cube">
+    Full block state read/write through `WorldTestContext`. Currently block operations use placeholders in the API module - the server-side implementations will connect to Hytale's chunk system for real block type resolution and placement.
+  </Card>
+  <Card title="Entity Type Spawning" icon="dragon">
+    Expand `spawnEntity` to support entity initialization callbacks, allowing tests to configure an entity's components, inventory, and stats immediately after spawning without waiting for ECS processors.
+  </Card>
+  <Card title="Benchmark Comparison" icon="chart-line">
+    Store historical benchmark results and compare across runs. Detect performance regressions automatically by comparing against a baseline. Planned output: delta percentages and threshold-based pass/fail for benchmarks.
+  </Card>
+  <Card title="Test Report HTML Export" icon="file-code">
+    Generate a standalone HTML report from test results, suitable for sharing or embedding in CI dashboards. Will include charts for pass/fail trends and benchmark timelines.
+  </Card>
+</CardGroup>
+
+## Mid-Term
+
+Features planned for subsequent releases.
+
+<AccordionGroup>
+  <Accordion title="Conditional Test Execution">
+    `@EnabledIf` and `@DisabledIf` annotations that evaluate runtime conditions (server version, plugin presence, world state) before running a test. More flexible than `@RequiresPlugin`.
+  </Accordion>
+  <Accordion title="Test Fixtures API">
+    A declarative system for setting up complex test scenarios. Define entity templates, block layouts, and inventory configurations as reusable fixtures that can be applied before tests.
+  </Accordion>
+  <Accordion title="Parallel Suite Execution">
+    Run independent suites in parallel across multiple threads. Requires careful isolation guarantees - likely limited to suites using `DEDICATED_WORLD` isolation to avoid shared-state conflicts.
+  </Accordion>
+  <Accordion title="Fluent Assertion API">
+    A builder-style assertion API as an alternative to the static method approach:
+    ```java
+    assertThat(entity).isAlive().hasComponent(TransformComponent.class).hasHealthAbove(50f);
+    ```
+  </Accordion>
+  <Accordion title="Custom Test Reporters">
+    A `TestRunListener` interface that allows plugins to receive test events (started, passed, failed, skipped) in real time. Enables custom logging, webhook notifications, or dashboard integrations.
+  </Accordion>
+</AccordionGroup>
+
+## Long-Term
+
+Exploratory features that depend on the Hytale server API.
+
+<AccordionGroup>
+  <Accordion title="Snapshot Diff Visualization">
+    When using `SNAPSHOT` isolation, show a diff of what changed during the test (entities created/removed, components modified, stat values changed). Useful for debugging mutation-heavy tests.
+  </Accordion>
+  <Accordion title="Test Coverage Tracking">
+    Track which ECS systems, event handlers, and commands are exercised by your tests. Generate coverage reports showing untested code paths. Requires bytecode instrumentation.
+  </Accordion>
+  <Accordion title="Mod Compatibility Testing">
+    Automated testing of mod-to-mod interactions. Load multiple mods in a test environment and verify they do not conflict with each other's events, commands, or ECS components.
+  </Accordion>
+</AccordionGroup>
+
+## Contributing
+
+HRTK is open to contributions. If you are interested in working on any of these features, or have ideas for new ones, join the discussion. Focus areas where help is most needed:
+
+- Block state integration with Hytale's chunk system
+- Performance optimization of snapshot save/restore
+- Additional assertion domains (AI, pathfinding, sound)
+- Documentation and example tests for common mod patterns
+
+<Tip>
+The best way to influence the roadmap is to build mods with HRTK and report what is missing. Real usage feedback drives prioritization more than feature requests.
+</Tip>
+
+## Next Steps
+
+- [Changelog](/project/changelog) - what has shipped so far
+- [How It Works](/how-it-works) - current architecture
+- [Your First Test](/writing-tests/your-first-test) - start using HRTK today

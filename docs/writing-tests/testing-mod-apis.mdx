@@ -1,0 +1,121 @@
+---
+title: "Testing Mod APIs"
+description: "How to test your mod's custom APIs, components, and events with HRTK - patterns and pitfalls from real-world testing."
+---
+
+When testing your own mod with HRTK, you need to understand how your mod interacts with Hytale's game loop and entity system. This guide covers the patterns that work, the pitfalls to avoid, and why each approach exists.
+
+## The Single-Tick Batch Pattern
+
+The most reliable way to test mod APIs is to do everything in a single `executeOnWorld()` call. This runs your spawn, query, and assert code on the world thread in the same tick.
+
+**Why this works:** Hytale's entity system requires all entity operations to happen on the world's tick thread. Entities in dedicated test worlds may not survive across ticks because Hytale's Spawning plugin removes NPCs without spawn markers.
+
+**Why not use waitTicks?** If your mod processes entities synchronously during spawning (e.g., your mod's spawn logic finishes all setup before returning), everything you need is available immediately. No ticks needed.
+
+```java
+@WorldTest
+void testMyModSpawn(WorldTestContext ctx) {
+    ctx.executeOnWorld(() -> {
+        // Your mod's spawn API runs on the world thread
+        MyModResult result = MyModAPI.spawn().createEnemy(
+                (World) ctx.getWorld(), "Dragon", 5,
+                new Vector3d(0, 65, 0));
+
+        // Query immediately - same tick, ref is valid
+        boolean isManaged = MyModAPI.query().isManaged(result.entityRef());
+        HytaleAssert.assertTrue("Entity should be managed by MyMod", isManaged);
+        
+        return null;
+    });
+}
+```
+
+## When You Need Multiple Ticks
+
+Some mod features use game systems that run once per tick (health scaling, model changes, ability setup). These changes won't be visible until the next tick processes them.
+
+**The problem:** Entities may not survive ticks in dedicated test worlds.
+
+**Solutions (in order of preference):**
+
+1. **Use your mod's query API** if it reads from internal state rather than entity components. Many mods store data in their own Maps or fields that are set immediately during spawn.
+
+2. **Test what's available right away.** If `spawnElite()` assigns a tier immediately but health scaling happens on the next tick, test the tier (works) and accept that health scaling can't be verified in this test.
+
+3. **Use @FlowTest with executeOnWorld()** if your entities DO survive ticks. This depends on your world setup and whether Hytale's Spawning plugin manages your entities.
+
+## Testing Custom Events
+
+If your mod fires events through Hytale's `EventRegistry`, use HRTK's `ctx.captureEvent()`:
+
+```java
+EventCapture<MyModEvent> capture = ctx.captureEvent(MyModEvent.class);
+// ... trigger the event ...
+EventAssert.assertEventFired(capture);
+```
+
+**If your mod has its own event bus** (e.g., a custom `ModEventBus` class), HRTK's `captureEvent()` won't see those events. Instead, register your own listener:
+
+```java
+private static MyEventCollector collector;
+
+@BeforeAll
+static void setup() {
+    collector = new MyEventCollector();
+    MyModAPI.registerListener(collector);
+}
+
+@AfterAll  
+static void teardown() {
+    MyModAPI.unregisterListener(collector);
+}
+```
+
+**Why the distinction?** HRTK hooks into Hytale's event system. Mods that use their own event dispatch need their own capture mechanism. This is by design - HRTK can't anticipate every mod's event architecture.
+
+## Config Manipulation in Tests
+
+Most mods have configurable behavior. Use @BeforeAll to set known config values, and @AfterAll to restore them:
+
+```java
+private static MyModPlugin plugin;
+private static float[] originalMultipliers;
+
+@BeforeAll
+static void setup() {
+    // Find your plugin via PluginManager
+    for (PluginBase p : PluginManager.get().getPlugins()) {
+        if (p instanceof MyModPlugin mp) { plugin = mp; break; }
+    }
+    // Save originals and set test values
+    originalMultipliers = plugin.getConfig().multipliers.clone();
+    plugin.getConfig().multipliers = new float[]{1.0f, 2.0f, 3.0f};
+}
+
+@AfterAll
+static void restore() {
+    if (plugin != null) {
+        plugin.getConfig().multipliers = originalMultipliers;
+    }
+}
+```
+
+**Why save and restore?** Tests run on a live server. Other mods and players are affected by config changes. Always clean up.
+
+## Choosing the Right Annotation
+
+| What you're testing | Annotation | Why |
+|---|---|---|
+| Pure logic (no world) | @HytaleTest | No world needed, fastest |
+| Entity spawn + immediate query | @WorldTest | Runs on world thread, full entity access |
+| Multi-tick behavior (waitTicks) | @FlowTest | Can wait for ticks between steps |
+| Performance measurement | @Benchmark | Controlled warmup + timed iterations |
+
+**The rule:** Use @WorldTest unless you need `waitTicks()`. If you call `waitTicks()` from @WorldTest, you'll get a clear error telling you to switch to @FlowTest.
+
+## Known Limitations
+
+- **Component changes are deferred.** Components added through the command buffer are not visible until the next tick processes them. If your mod adds components during spawn, they won't be queryable in the same tick via `store.getComponent()`. Use your mod's own query API or accept this limitation.
+- **Entities may not survive ticks.** Hytale's Spawning plugin can remove NPCs from test worlds. The single-tick batch pattern avoids this entirely.
+- **Custom event buses aren't captured by HRTK.** Register your own listener if your mod doesn't use Hytale's EventRegistry.

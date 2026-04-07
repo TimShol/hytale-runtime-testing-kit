@@ -1,0 +1,139 @@
+---
+title: "Death & Respawn"
+description: "Test death causes, item loss on death, and the respawn system with DeathComponent assertions."
+---
+
+When an entity dies in Hytale, the `DeathComponent` is attached to it carrying the cause of death, the death message, item loss data, and respawn control. Your death screen, kill feed, item recovery system, and custom respawn logic all depend on reading this component correctly.
+
+Testing death and respawn is critical because `getDeathCause()` returns a DamageCause index, not the DamageCause object itself. If you read it wrong, your kill feed shows "Unknown" for every death. Automated tests catch this before your players do.
+
+<Note>
+Death assertions require entities with stat components (EntityStatMap, DeathComponent). Always use `spawnNPC` with a valid role name - empty entities created with `ctx.createEntity()` lack the required components.
+</Note>
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.CombatTest;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.CombatAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.StatsAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Death and Respawn Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("death")
+public class DeathRespawnTests {
+
+    @CombatTest
+    @Order(1)
+    @DisplayName("Entity gains DeathComponent after lethal damage")
+    void deathComponentAfterLethalDamage(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        // Deal lethal damage through the damage pipeline.
+        ctx.dealDamage(entity, 99999.0f, "GENERIC");
+        ctx.waitTicks(5);
+
+        Object store = ctx.getStore();
+        StatsAssert.assertDead(store, entity);
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("DeathItemLoss.noLossMode returns a valid configuration")
+    void noLossModeIsValid() {
+        // DeathItemLoss.noLossMode() is a static factory that creates
+        // a "no items lost" configuration for custom death penalties.
+        // Your hardcore mod might override this; your casual mod uses it as default.
+        var noLoss = DeathItemLoss.noLossMode();
+        HytaleAssert.assertNotNull("noLossMode should return a valid object", noLoss);
+    }
+
+    @CombatTest
+    @Order(3)
+    @DisplayName("DamageModule groups are accessible")
+    void damageModuleGroupsAccessible() {
+        // DamageModule exposes damage processing groups that control
+        // how damage flows through the pipeline: gather, filter, inspect.
+        var module = DamageModule.get();
+        HytaleAssert.assertNotNull("DamageModule singleton should exist", module);
+    }
+
+    @CombatTest
+    @Order(4)
+    @DisplayName("Killed entity is not alive")
+    void killedEntityIsNotAlive(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        StatsAssert.assertAlive(ctx.getStore(), entity);
+
+        ctx.dealDamage(entity, 99999.0f, "MELEE");
+        ctx.waitTicks(5);
+
+        StatsAssert.assertDead(ctx.getStore(), entity);
+    }
+}
+```
+
+## DeathComponent API
+
+The `DeathComponent` is the ECS component Hytale attaches to dead entities. Key methods:
+
+| Method | Returns | Description |
+|---|---|---|
+| `getDeathCause()` | death cause info | The damage cause that killed the entity |
+| `getDeathMessage()` | `String` | The death message for the kill feed |
+| `setDeathMessage(String)` | `void` | Override the death message |
+| `isShowDeathMenu()` | `boolean` | Whether to show the death/respawn UI |
+| `setShowDeathMenu(boolean)` | `void` | Control death menu visibility |
+| `getItemsLostOnDeath()` | items | Items the entity drops on death |
+| `setItemsLostOnDeath(...)` | `void` | Override dropped items |
+| `getDeathItemLoss()` | `DeathItemLoss` | Item loss configuration |
+| `respawn()` | `void` | Static method to trigger respawn |
+
+## DeathItemLoss API
+
+`DeathItemLoss` controls what items a player loses when they die:
+
+| Method | Returns | Description |
+|---|---|---|
+| `getLossMode()` | loss mode | How items are lost (all, percentage, none) |
+| `getItemsLost()` | items | Which items are marked for loss |
+| `getAmountLossPercentage()` | `float` | Percentage of stack amounts lost |
+| `getDurabilityLossPercentage()` | `float` | Percentage of durability lost |
+| `noLossMode()` | `DeathItemLoss` | Static factory for zero item loss |
+
+## DamageSystems Pipeline
+
+Use `DamageSystems.executeDamage()` instead of manually subtracting health. The damage pipeline runs resistances, triggers events, and processes death correctly:
+
+- `DamageModule.get()` - returns the singleton
+- `DamageModule.getGatherDamageGroup()` - first stage, collects damage sources
+- `DamageModule.getFilterDamageGroup()` - second stage, applies resistances
+- `DamageModule.getInspectDamageGroup()` - final stage, logs and triggers events
+
+## Isolation Recommendation
+
+Death tests mutate entity state heavily. Use `IsolationStrategy.DEDICATED_WORLD`:
+
+```java
+@HytaleSuite(value = "Death Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("death")
+public class DeathTests { }
+```
+
+## Next Steps
+
+- [Stats & Combat](/surfaces/stats-and-combat) - health, damage, and stat modifier assertions
+- [Effects](/surfaces/effects) - invulnerability and status effect testing
+- [Inventory & Loot](/surfaces/inventory-and-loot) - verify item drops on death

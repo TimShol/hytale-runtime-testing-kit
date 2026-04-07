@@ -1,0 +1,232 @@
+---
+title: "Event Testing"
+description: "Capture, assert, and inspect events with EventAssert and EventCapture during test execution."
+---
+
+Events are a core communication mechanism in Hytale server plugins. When an NPC takes damage, a player joins, or a block breaks, the server fires events that plugins can listen to. HRTK lets you capture events fired during a test and assert on their occurrence, count, and contents using `EventAssert` and `EventCapture`.
+
+Testing events is essential because many mod features are event-driven. If your damage handler listens for `DamageEvent` but the event stops firing after a server update, your mod silently breaks. Event tests catch these regressions by verifying that the right events fire at the right times with the right data.
+
+## Event Capture Lifecycle
+
+The capture lifecycle is straightforward:
+
+1. **Start** - Call `ctx.captureEvent(EventType.class)` to begin recording. HRTK registers a server-level listener that collects every matching event.
+2. **Trigger** - Perform the action that should fire the event (spawn an entity, deal damage, send a command).
+3. **Assert** - Check that the expected events were captured with the correct count and data.
+4. **Close** - Call `capture.close()` to unregister the listener. HRTK also auto-unregisters all listeners when the test or suite finishes, so listeners never leak even if you forget to close them.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.EventAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.context.TestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+import com.frotty27.hrtk.api.mock.EventCapture;
+
+@HytaleSuite(value = "Event Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("events")
+public class EventSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Capture a custom event and verify it was fired")
+    void captureCustomEvent(TestContext ctx) {
+        // Start capturing DamageEvent instances.
+        // The capture records every DamageEvent fired on the server from this point on.
+        EventCapture<DamageEvent> capture = ctx.captureEvent(DamageEvent.class);
+
+        // Trigger the event by dealing damage to an entity.
+        // In a real test, this would call your mod's damage logic.
+        triggerDamageEvent(ctx);
+
+        // Verify that at least one DamageEvent was fired.
+        EventAssert.assertEventFired(capture);
+        HytaleAssert.assertTrue("Capture should report event was fired", capture.wasFired());
+
+        capture.close();
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Verify an event was NOT fired when nothing happens")
+    void noEventOnIdleServer(TestContext ctx) {
+        EventCapture<CustomModEvent> capture = ctx.captureEvent(CustomModEvent.class);
+
+        // Do not trigger anything - the server is idle.
+        // This verifies that your event is not being fired spuriously.
+
+        EventAssert.assertEventNotFired(capture);
+        HytaleAssert.assertEquals(0, capture.getCount());
+
+        capture.close();
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Verify event data matches expectations")
+    void eventContainsCorrectData(TestContext ctx) {
+        EventCapture<DamageEvent> capture = ctx.captureEvent(DamageEvent.class);
+
+        // Trigger a damage event with known parameters.
+        triggerDamageEvent(ctx, 15.0f, "MELEE");
+
+        // assertEventFiredWith checks that at least one captured event
+        // matches the predicate. This lets you verify specific field values.
+        EventAssert.assertEventFiredWith(capture, event ->
+            event.getDamage() > 0 && event.getSource() != null
+        );
+
+        capture.close();
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Assert exact event count after multiple triggers")
+    void exactEventCountOnMultipleHits(TestContext ctx) {
+        EventCapture<DamageEvent> capture = ctx.captureEvent(DamageEvent.class);
+
+        // Trigger exactly two damage events.
+        triggerDamageEvent(ctx, 5.0f, "MELEE");
+        triggerDamageEvent(ctx, 8.0f, "MELEE");
+
+        // Verify that exactly 2 events were captured - no more, no less.
+        EventAssert.assertEventFired(capture, 2);
+
+        capture.close();
+    }
+
+    @HytaleTest
+    @Order(5)
+    @DisplayName("Inspect first and last captured events")
+    void inspectFirstAndLastEvent(TestContext ctx) {
+        EventCapture<DamageEvent> capture = ctx.captureEvent(DamageEvent.class);
+
+        // Fire three events with different damage values.
+        triggerDamageEvent(ctx, 5.0f, "MELEE");
+        triggerDamageEvent(ctx, 10.0f, "RANGED");
+        triggerDamageEvent(ctx, 20.0f, "FIRE");
+
+        // getFirst() and getLast() let you inspect the boundary events.
+        HytaleAssert.assertNotNull("First event should not be null", capture.getFirst());
+        HytaleAssert.assertNotNull("Last event should not be null", capture.getLast());
+
+        capture.close();
+    }
+
+    @HytaleTest
+    @Order(6)
+    @DisplayName("Event cancellation does not prevent capture")
+    void cancelledEventsAreStillCaptured(TestContext ctx) {
+        // HRTK captures events regardless of whether another plugin cancels them.
+        // This means you can verify that events fire even if downstream handlers
+        // call event.setCancelled(true).
+        EventCapture<DamageEvent> capture = ctx.captureEvent(DamageEvent.class);
+
+        triggerCancelledDamageEvent(ctx);
+
+        // The event was fired (and then cancelled), but the capture still saw it.
+        EventAssert.assertEventFired(capture);
+
+        capture.close();
+    }
+}
+```
+
+## EventCapture Interface
+
+| Method | Description |
+|---|---|
+| `getEvents()` | Get all captured events in order |
+| `getCount()` | Number of captured events |
+| `wasFired()` | True if at least one event was captured |
+| `anyMatch(predicate)` | True if any event matches the predicate |
+| `getFirst()` | First captured event (or null) |
+| `getLast()` | Last captured event (or null) |
+| `clear()` | Clear all captured events |
+| `close()` | Stop capturing and unregister the listener |
+
+## EventAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertEventFired(capture)` | Assert at least one event was captured |
+| `assertEventFired(capture, count)` | Assert exactly N events were captured |
+| `assertEventNotFired(capture)` | Assert no events were captured |
+| `assertEventFiredWith(capture, predicate)` | Assert at least one event matches |
+
+## Event Priority and Cancellation
+
+HRTK's event capture system registers listeners at the server level. This means:
+
+- Captured events include both cancelled and non-cancelled events (depending on listener priority)
+- Your test can observe events that other plugins may cancel
+- The capture does not interfere with normal event processing
+
+<Warning>
+Always call `capture.close()` when you are done to unregister the listener. HRTK automatically unregisters all event listeners when a test or suite finishes, so listeners will never leak even if you forget to close them. However, it is still best practice to close captures explicitly so they stop accumulating events as soon as you no longer need them.
+</Warning>
+
+## Built-in Hytale Event Types
+
+The Hytale server JAR includes many specific event types you can capture directly:
+
+### Block Events (cancellable)
+- `BreakBlockEvent` - fires when a block is broken. Has `getBlockType()`, `getTargetBlock()`, `getItemInHand()`.
+- `PlaceBlockEvent` - fires when a block is placed. Has `getTargetBlock()`, `getItemInHand()`, `getRotation()`.
+- `DamageBlockEvent` - fires when a block takes mining damage. Has `getDamage()`, `getCurrentDamage()`, `setDamage()`.
+
+### Player Events
+- `PlayerChatEvent` (async, cancellable) - chat messages. Has `getContent()`, `setContent()`, `getSender()`, `getTargets()`.
+- `PlayerConnectEvent` - player joins. Has `getWorld()`, `setWorld()`, `getPlayerRef()`, `getPlayer()`.
+- `PlayerDisconnectEvent` - player leaves. Has `getPlayerRef()`, `getDisconnectReason()`.
+- `PlayerInteractEvent` (cancellable) - right-click. Has `getActionType()`, `getItemInHand()`, `getTargetBlock()`, `getTargetEntity()`.
+- `PlayerCraftEvent` - crafting. Has `getCraftedRecipe()`, `getQuantity()`.
+- `PlayerMouseButtonEvent` (cancellable) - mouse clicks. Has `getMouseButton()`, `getTargetBlock()`, `getTargetEntity()`.
+
+### Entity Events
+- `EntityRemoveEvent` - entity despawns. Has `getEntity()`.
+- `LivingEntityInventoryChangeEvent` - inventory modified. Has `getItemContainer()`, `getTransaction()`.
+
+### ECS Events (cancellable)
+- `ChangeGameModeEvent` - game mode change. Has `getGameMode()`, `setGameMode()`.
+- `SwitchActiveSlotEvent` - hotbar switch. Has `getPreviousSlot()`, `getNewSlot()`, `isClientRequest()`.
+- `CraftRecipeEvent` - crafting. Has `getCraftedRecipe()`, `getQuantity()`.
+- `DropItemEvent` - item dropped.
+- `InteractivelyPickupItemEvent` - item picked up. Has `getItemStack()`, `setItemStack()`.
+
+### Lifecycle Events
+- `BootEvent` - server started.
+- `ShutdownEvent` - server shutting down. Has phase constants: `DISCONNECT_PLAYERS`, `UNBIND_LISTENERS`, `SHUTDOWN_WORLDS`.
+- `PrepareUniverseEvent` - worlds being set up. Has `getWorldConfigProvider()`.
+
+### Permission Events
+- `PlayerPermissionChangeEvent` - user permission changed. Has `getPlayerUuid()`.
+- `GroupPermissionChangeEvent` - group permission changed. Has `getGroupName()`.
+
+### Event Priority
+
+Use `EventPriority` to control when your listener runs: `FIRST`, `EARLY`, `NORMAL`, `LATE`, `LAST`. Register with priority via `eventRegistry.register(EventPriority.FIRST, EventClass.class, handler)`.
+
+## When to Use Event Testing
+
+Event tests are most valuable when:
+
+- Your mod's core logic is event-driven (damage handlers, join handlers, custom triggers)
+- You need to verify that events carry the correct data after a refactor
+- You want to confirm that an action does NOT fire an event (negative testing)
+- You are testing cross-plugin communication where one plugin fires events that another consumes
+
+## Next Steps
+
+- [Command Testing](/surfaces/commands) - test commands with mock senders
+- [ECS Testing](/surfaces/ecs) - entity and component assertions
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - wait for events to fire

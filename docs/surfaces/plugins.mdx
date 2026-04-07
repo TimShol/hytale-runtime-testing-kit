@@ -1,0 +1,102 @@
+---
+title: "Plugins"
+description: "Test plugin loading state and plugin discovery."
+---
+
+The Plugins surface lets you verify that specific plugins are loaded and check the total plugin count. `PluginTestAdapter` provides direct PluginManager access, while `PluginAssert` wraps lookups as failing assertions with descriptive messages.
+
+Plugin loading tests are smoke tests for your server setup. If a plugin fails to load (missing dependency, initialization error, wrong JAR placement), these tests catch it immediately. This is especially valuable in CI/CD pipelines where you want to verify the complete plugin set is loaded before running feature tests.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PluginAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.util.List;
+
+@HytaleSuite(value = "Plugin Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("plugins")
+public class PluginSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("HRTK plugin is loaded")
+    void hrtkPluginLoaded() {
+        // assertPluginLoaded searches the PluginManager by name.
+        // If the plugin is not found, the test fails with a clear message.
+        PluginAssert.assertPluginLoaded("hrtk");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Expected plugin count matches")
+    void expectedPluginCount() {
+        // assertPluginCount expects an exact match.
+        // Adjust the number to match your server's expected plugin count.
+        PluginAssert.assertPluginCount(3);
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("List all loaded plugin names")
+    void listLoadedPlugins() {
+        // getPluginNames returns all loaded plugin names.
+        // Useful for debugging when a plugin assertion fails.
+        List<String> plugins = PluginTestAdapter.getPluginNames();
+        HytaleAssert.assertNotNull("Plugin names list should not be null", plugins);
+        HytaleAssert.assertNotEmpty(plugins);
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Plugin instance is accessible by name")
+    void pluginInstanceAccessible() {
+        Object plugin = PluginTestAdapter.getPlugin("hrtk");
+        HytaleAssert.assertNotNull(
+            "Plugin instance should be accessible",
+            plugin
+        );
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `isPluginLoaded(String name)` | `boolean` | Check if a plugin with the given name is loaded |
+| `getPluginNames()` | `List<String>` | List the names of all loaded plugins |
+| `getPlugin(String name)` | `Object` | Get the plugin instance by name (returns null if not found) |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertPluginLoaded(String pluginName)` | "Expected plugin '[pluginName]' to be loaded but it was not found" |
+| `assertPluginCount(int expected)` | "Expected [expected] loaded plugins but found [actual]" |
+
+## When to Test Plugins
+
+Plugin tests serve as the foundation of your test suite:
+
+- **CI/CD smoke tests** - Verify all required plugins loaded before running feature tests
+- **Dependency checks** - Confirm your mod's plugin dependencies are present
+- **Version validation** - After server updates, verify the plugin set is intact
+- **Debugging** - Use `getPluginNames()` to see exactly what loaded when tests fail
+
+`assertPluginLoaded()` searches the PluginManager by name using reflection - it checks `getPlugin()`, `isLoaded()`, and `getPlugins()` accessors.
+
+## Next Steps
+
+- [Persistence](/surfaces/persistence) - verify save infrastructure
+- [Crafting](/surfaces/crafting) - verify recipe registrations
+- [Commands](/surfaces/commands) - test plugin commands

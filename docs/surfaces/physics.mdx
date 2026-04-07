@@ -1,0 +1,175 @@
+---
+title: "Physics"
+description: "Test entity velocity, forces, speed, and ground detection."
+---
+
+The Physics surface provides assertions and adapter methods for testing entity movement, velocity, forces, and ground state. Use `PhysicsTestAdapter` to manipulate physics properties and `PhysicsAssert` to verify them.
+
+Physics testing is inherently time-dependent and approximate. Entities move over ticks, gravity pulls them down, collisions deflect them, and forces accumulate over time. This means physics assertions always use tolerances, and you must wait the right number of ticks for the physics simulation to settle.
+
+## Physics Testing Limitations
+
+Before diving into examples, understand these constraints:
+
+- **Tick-dependent** - Physics state changes every tick. You must call `ctx.waitTicks(n)` after applying forces or spawning entities to let the simulation process.
+- **Approximate values** - Velocity and position are floating-point values affected by gravity, friction, and collision. Always use tolerance parameters in assertions.
+- **Ground detection lag** - An entity spawned in the air needs several ticks to fall and be detected as "on ground." Wait 2-5 ticks before checking ground state.
+- **Server-side only** - HRTK tests server-side physics. Client-side visual interpolation is not tested.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PhysicsAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Physics Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("physics")
+public class PhysicsSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Spawned entity on solid ground is stationary")
+    void spawnedEntityIsStationary(WorldTestContext ctx) {
+        // Build a solid floor first, then spawn on top of it.
+        ctx.fillRegion(-5, 63, -5, 5, 63, 5, "Rock_Sandstone");
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(5);
+
+        Object store = ctx.getStore();
+
+        // assertOnGround checks the grounded flag on the physics component.
+        PhysicsAssert.assertOnGround(store, entity);
+
+        // assertStationary checks that the entity's speed is below the tolerance.
+        // A small tolerance (0.01) accounts for floating-point imprecision.
+        PhysicsAssert.assertStationary(store, entity, 0.01);
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Read velocity components from a moving entity")
+    void readVelocityFromEntity(WorldTestContext ctx) {
+        ctx.fillRegion(-5, 63, -5, 5, 63, 5, "Rock_Sandstone");
+        Object entity = ctx.spawnNPC("Trork_Warrior", 0, 64, 0);
+        ctx.waitTicks(2);
+
+        Object store = ctx.getStore();
+
+        // getVelocity returns a double array [vx, vy, vz].
+        double[] velocity = ctx.getVelocity(store, entity);
+        HytaleAssert.assertNotNull("Velocity should not be null", velocity);
+        HytaleAssert.assertEquals(3, velocity.length);
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Entity in air is detected as not on ground")
+    void entityInAirDetected(WorldTestContext ctx) {
+        // Spawn the entity high above the ground with no floor beneath.
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 200, 0);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // The entity is falling - it should be detected as in the air.
+        PhysicsAssert.assertInAir(store, entity);
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Apply a force and verify the entity gains speed")
+    void applyForceGivesSpeed(WorldTestContext ctx) {
+        ctx.fillRegion(-5, 63, -5, 5, 63, 5, "Rock_Sandstone");
+        Object entity = ctx.spawnNPC("Trork_Warrior", 0, 64, 0);
+        ctx.waitTicks(2);
+
+        Object store = ctx.getStore();
+
+        // Apply a horizontal force impulse in the +X direction.
+        ctx.addForce(store, entity, 5.0, 0.0, 0.0);
+        ctx.waitTicks(1);
+
+        // After the force is applied, the entity's speed should be above zero.
+        double speed = ctx.getSpeed(store, entity);
+        HytaleAssert.assertTrue(
+            "Speed should be greater than zero after force application",
+            speed > 0.0
+        );
+    }
+
+    @WorldTest
+    @Order(5)
+    @DisplayName("Set velocity directly and verify it was applied")
+    void setVelocityDirectly(WorldTestContext ctx) {
+        ctx.fillRegion(-5, 63, -5, 5, 63, 5, "Rock_Sandstone");
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(2);
+
+        Object store = ctx.getStore();
+
+        // setVelocity overrides the current velocity with exact values.
+        ctx.setVelocity(store, entity, 1.0, 2.0, 3.0);
+        ctx.waitTicks(1);
+
+        // Verify the velocity was set. Note: gravity and friction will have
+        // modified the values slightly by the time we read them one tick later.
+        PhysicsAssert.assertVelocity(store, entity, 1.0, 2.0, 3.0, 1.0);
+    }
+
+    @WorldTest
+    @Order(6)
+    @DisplayName("Verify speed assertion with tolerance")
+    void speedAssertionWithTolerance(WorldTestContext ctx) {
+        ctx.fillRegion(-5, 63, -5, 5, 63, 5, "Rock_Sandstone");
+        Object entity = ctx.spawnNPC("Outlander_Hunter", 0, 64, 0);
+        ctx.waitTicks(5);
+
+        Object store = ctx.getStore();
+
+        // A stationary entity should have speed near 0.
+        PhysicsAssert.assertSpeed(store, entity, 0.0, 0.1);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `getVelocity` | `Object store, Object ref` | `double[]` | Get entity velocity as `[vx, vy, vz]` |
+| `setVelocity` | `Object store, Object ref, double vx, double vy, double vz` | `void` | Set entity velocity directly |
+| `addForce` | `Object store, Object ref, double fx, double fy, double fz` | `void` | Apply a force impulse to the entity |
+| `getSpeed` | `Object store, Object ref` | `double` | Get the entity's current scalar speed |
+| `isOnGround` | `Object store, Object ref` | `boolean` | Check if the entity is grounded |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertVelocity` | `Object store, Object ref, double vx, double vy, double vz, double tolerance` | "Expected velocity [vx,vy,vz] but was [actual]" |
+| `assertSpeed` | `Object store, Object ref, double expected, double tolerance` | "Expected speed [expected] but was [actual]" |
+| `assertOnGround` | `Object store, Object ref` | "Expected entity to be on ground" |
+| `assertInAir` | `Object store, Object ref` | "Expected entity to be in air" |
+| `assertStationary` | `Object store, Object ref, double tolerance` | "Expected entity to be stationary but speed was [actual]" |
+
+## Practical Tips
+
+- Build a solid floor with `ctx.fillRegion(...)` before spawning entities if your test requires them to be on the ground. In a void world, entities will fall indefinitely.
+- Wait at least 2 ticks after spawning before checking ground state - the entity needs time to settle.
+- Use generous tolerances (0.5-1.0) for velocity assertions because gravity and friction modify values between ticks.
+- `addForce` applies an instantaneous impulse, not a continuous force. The entity will decelerate due to friction on subsequent ticks.
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - entity spawning and positioning
+- [ECS Testing](/surfaces/ecs) - lower-level component access
+- [Stats & Combat](/surfaces/stats-and-combat) - knockback and damage

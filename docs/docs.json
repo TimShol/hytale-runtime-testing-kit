@@ -1,0 +1,143 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "HRTK - Hytale Runtime Testing Kit",
+  "theme": "palm",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#3B82F6",
+    "dark": "#1D4ED8"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "icon": "rocket",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart",
+          "how-it-works"
+        ]
+      },
+      {
+        "group": "Writing Tests",
+        "icon": "pen-to-square",
+        "pages": [
+          "writing-tests/your-first-test",
+          "writing-tests/test-suites",
+          "writing-tests/lifecycle-hooks",
+          "writing-tests/filtering-and-tags",
+          "writing-tests/parameterized-tests",
+          "writing-tests/timeouts-and-repetition",
+          "writing-tests/async-and-tick-waiting",
+          "writing-tests/testing-mod-apis"
+        ]
+      },
+      {
+        "group": "Testing Surfaces",
+        "icon": "layer-group",
+        "pages": [
+          "surfaces/ecs",
+          "surfaces/events",
+          "surfaces/commands",
+          "surfaces/codecs",
+          "surfaces/world",
+          "surfaces/stats-and-combat",
+          "surfaces/inventory-and-loot",
+          "surfaces/effects",
+          "surfaces/ui",
+
+          "surfaces/benchmarks",
+          "surfaces/npc",
+          "surfaces/blocks",
+          "surfaces/items",
+          "surfaces/physics",
+          "surfaces/players",
+          "surfaces/permissions",
+          "surfaces/weather",
+          "surfaces/chunks",
+          "surfaces/crafting",
+          "surfaces/ai",
+          "surfaces/projectiles",
+          "surfaces/chat",
+          "surfaces/scheduling",
+          "surfaces/persistence",
+          "surfaces/plugins",
+          "surfaces/death-respawn",
+          "surfaces/game-modes"
+        ]
+      },
+      {
+        "group": "Test Isolation",
+        "icon": "shield-halved",
+        "pages": [
+          "isolation/overview",
+          "isolation/none",
+          "isolation/snapshot",
+          "isolation/dedicated-world"
+        ]
+      },
+      {
+        "group": "Flow Testing",
+        "icon": "arrows-turn-to-dots",
+        "pages": [
+          "flows/overview",
+          "flows/spawn-kill-loot",
+          "flows/writing-custom-flows"
+        ]
+      },
+      {
+        "group": "Running Tests",
+        "icon": "play",
+        "pages": [
+          "running/commands",
+          "running/console-output",
+          "running/file-export"
+        ]
+      },
+      {
+        "group": "API Reference",
+        "icon": "book-open",
+        "pages": [
+          "api/annotations",
+          "api/contexts"
+        ]
+      },
+      {
+        "group": "Server Plugin",
+        "icon": "server",
+        "pages": [
+          "server/architecture"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "icon": "gear",
+        "pages": [
+          "advanced/profiling-with-spark"
+        ]
+      },
+      {
+        "group": "Guides",
+        "icon": "book",
+        "pages": [
+          "guides/test-catalog"
+        ]
+      },
+      {
+        "group": "Project",
+        "icon": "circle-info",
+        "pages": [
+          "project/changelog",
+          "project/example-mod-tests",
+          "project/roadmap"
+        ]
+      }
+    ]
+  }
+}

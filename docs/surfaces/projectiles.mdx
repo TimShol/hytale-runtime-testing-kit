@@ -1,0 +1,110 @@
+---
+title: "Projectiles"
+description: "Test projectile module availability."
+---
+
+The Projectiles surface lets you verify that the server's projectile module is present and accessible. `ProjectileTestAdapter` provides direct classpath checks, while `ProjectileAssert` wraps them as failing assertions.
+
+Projectile testing is important when your mod creates custom projectiles (arrows, spells, thrown items) or modifies projectile behavior. The first step is always verifying that the projectile module itself is available, since it may not be present in all server configurations.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.ProjectileAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Projectile Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("projectiles")
+public class ProjectileSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Projectile module is available on the server")
+    void projectileModuleAvailable() {
+        // assertProjectileModuleAvailable checks that the ProjectileModule class
+        // exists on the classpath. If it is missing, projectile-related features
+        // in your mod will not function.
+        ProjectileAssert.assertProjectileModuleAvailable();
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Projectile module singleton is accessible")
+    void projectileModuleSingletonAccessible() {
+        // getProjectileModule returns the singleton instance.
+        // This verifies not just classpath presence but actual runtime availability.
+        Object module = ProjectileTestAdapter.getProjectileModule();
+        HytaleAssert.assertNotNull(
+            "ProjectileModule singleton should be accessible",
+            module
+        );
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Projectile module exists check returns true")
+    void projectileModuleExistsCheck() {
+        HytaleAssert.assertTrue(
+            "projectileModuleExists should return true",
+            ProjectileTestAdapter.projectileModuleExists()
+        );
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `projectileModuleExists()` | `boolean` | Check if the ProjectileModule class is on the classpath |
+| `getProjectileModule()` | `Object` | Get the ProjectileModule singleton instance (returns null if unavailable) |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertProjectileModuleAvailable()` | "Expected ProjectileModule to be available on the classpath but it was not found" |
+
+## When to Test Projectiles
+
+Projectile surface tests are primarily classpath availability checks. Use them as:
+
+- **Precondition guards** - Run these before any test that creates or inspects projectiles
+- **Smoke tests** - Verify that the server build includes the projectile module
+- **Build validation** - Catch missing dependencies in your mod's build pipeline
+
+For testing actual projectile behavior (trajectory, collision, damage), combine with the [Physics](/surfaces/physics) and [Stats & Combat](/surfaces/stats-and-combat) surfaces using ECS component assertions.
+
+## Hytale Projectile System API
+
+The Hytale server exposes a rich projectile system beyond what HRTK currently wraps:
+
+- **`ProjectileModule`** - The core plugin. Has `get()` singleton and `spawnProjectile(UUID owner, Vector3d position, Vector3d velocity)` for creating projectiles programmatically.
+- **`ProjectileConfig`** (asset) - Defines projectile properties. Has `getPhysicsConfig()`, `getLaunchForce()`, `getMuzzleVelocity()`, `getGravity()`, `getModel()`.
+- **`StandardPhysicsConfig`** - Physics settings for projectiles. Has `getGravity()`, `getBounciness()`, `getBounceCount()`, `getBounceLimit()`, `isSticksVertically()`.
+- **`ImpactConsumer`** (interface) - Callback when a projectile hits something: `onImpact(projectileRef, position, hitEntityRef, hitType, commandBuffer)`.
+- **`BounceConsumer`** (interface) - Callback when a projectile bounces: `onBounce(projectileRef, position, commandBuffer)`.
+
+If your mod spawns custom projectiles, test the config asset properties directly:
+
+```java
+var configs = ProjectileConfig.getAssetMap();
+var arrowConfig = configs.get("Ammo_Arrow");
+HytaleAssert.assertNotNull(arrowConfig);
+HytaleAssert.assertTrue(arrowConfig.getMuzzleVelocity() > 0f);
+HytaleAssert.assertTrue(arrowConfig.getGravity() > 0f);
+```
+
+## Next Steps
+
+- [Physics](/surfaces/physics) - test projectile velocity and trajectory
+- [Stats & Combat](/surfaces/stats-and-combat) - test projectile damage
+- [ECS Testing](/surfaces/ecs) - inspect projectile entity components

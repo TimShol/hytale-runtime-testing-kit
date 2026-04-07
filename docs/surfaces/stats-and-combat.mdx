@@ -1,0 +1,215 @@
+---
+title: "Stats & Combat"
+description: "Assert on health, damage, death, stat modifiers, and knockback with StatsAssert and CombatAssert."
+---
+
+Combat is at the heart of Hytale gameplay. Whether you are building a PvE dungeon, a PvP arena, or a custom boss fight, you need to verify that damage calculations, health thresholds, death triggers, and stat modifiers all work correctly. HRTK provides two assertion classes for this: `StatsAssert` for stat values, modifiers, and health; and `CombatAssert` for combat-specific checks like damage thresholds and knockback.
+
+Testing combat matters for one critical reason: **balance verification**. A single wrong damage multiplier or a broken stat modifier can ruin the player experience. Automated tests let you verify that your Kweebecs survive the intended number of hits, that armor actually reduces damage, and that death triggers fire at the right time - every time you build your mod.
+
+<Note>
+Combat and stat assertions require entities that have the relevant components (EntityStatMap, DeathComponent, etc.). Entities spawned via `spawnEntity` with a valid NPC role name will have these components. Empty fallback entities may lack them. Use `spawnNPC` for combat tests to ensure the entity has the required components.
+</Note>
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.CombatTest;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.CombatAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.StatsAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
+import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
+
+@HytaleSuite(value = "Combat Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("combat")
+public class CombatSurfaceTests {
+
+    @CombatTest
+    @Order(1)
+    @DisplayName("Spawned Kweebec is alive with full health")
+    void spawnedKweebecIsAlive(WorldTestContext ctx) {
+        // Spawn a Kweebec NPC and allow one tick for initialization.
+        // After spawning, it should be alive and at maximum health.
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+        StatsAssert.assertAlive(store, entity);
+        StatsAssert.assertHealthAtMax(store, entity);
+    }
+
+    @CombatTest
+    @Order(2)
+    @DisplayName("Damage reduces Kweebec health below maximum")
+    void damageReducesHealth(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        var statMap = (EntityStatMap) ctx.getComponent(entity, EntityStatMap.getComponentType());
+        HytaleAssert.assertNotNull("Entity should have EntityStatMap", statMap);
+
+        int healthStat = DefaultEntityStatTypes.getHealth();
+        statMap.subtractStatValue(healthStat, 10.0f);
+        ctx.flush();
+        ctx.waitTicks(1);
+
+        CombatAssert.assertHealthBelow(store, entity, statMap.get(healthStat).getMax());
+        StatsAssert.assertAlive(store, entity);
+    }
+
+    @CombatTest
+    @Order(3)
+    @DisplayName("Lethal damage kills the entity")
+    void lethalDamageCausesDeath(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 20, 64, 20);
+        ctx.waitTicks(1);
+
+        var statMap = (EntityStatMap) ctx.getComponent(entity, EntityStatMap.getComponentType());
+        int healthStat = DefaultEntityStatTypes.getHealth();
+        statMap.subtractStatValue(healthStat, 9999.0f);
+        ctx.flush();
+        ctx.waitTicks(5);
+
+        Object store = ctx.getStore();
+        StatsAssert.assertDead(store, entity);
+    }
+
+    @CombatTest
+    @Order(4)
+    @DisplayName("Health can be checked at a specific value after partial damage")
+    void healthEqualsAfterPartialDamage(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        var statMap = (EntityStatMap) ctx.getComponent(entity, EntityStatMap.getComponentType());
+        int healthStat = DefaultEntityStatTypes.getHealth();
+        statMap.subtractStatValue(healthStat, 25.0f);
+        ctx.flush();
+        ctx.waitTicks(1);
+
+        StatsAssert.assertAlive(store, entity);
+        CombatAssert.assertAlive(store, entity);
+    }
+
+    @CombatTest
+    @Order(5)
+    @DisplayName("Stat modifier is applied and visible")
+    void statModifierIsApplied(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 30, 64, 30);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // Apply a named defense modifier, simulating equipping armor.
+        // Modifiers alter a stat's computed value without changing the base.
+        ctx.applyStatModifier(entity, "DEFENSE", "iron_chestplate_defense", 15.0f);
+        ctx.waitTicks(1);
+
+        StatsAssert.assertHasModifier(store, entity, ctx.getStatType("DEFENSE"), "iron_chestplate_defense");
+    }
+
+    @CombatTest
+    @Order(6)
+    @DisplayName("Removing a stat modifier restores original stat")
+    void statModifierCanBeRemoved(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 40, 64, 40);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // Apply then remove the modifier.
+        ctx.applyStatModifier(entity, "DEFENSE", "temporary_buff", 20.0f);
+        ctx.waitTicks(1);
+        StatsAssert.assertHasModifier(store, entity, ctx.getStatType("DEFENSE"), "temporary_buff");
+
+        ctx.removeStatModifier(entity, "DEFENSE", "temporary_buff");
+        ctx.waitTicks(1);
+        StatsAssert.assertNoModifier(store, entity, ctx.getStatType("DEFENSE"), "temporary_buff");
+    }
+
+    @CombatTest
+    @Order(7)
+    @DisplayName("Knockback is applied on melee hit")
+    void meleeHitAppliesKnockback(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 50, 64, 50);
+        ctx.waitTicks(1);
+
+        var statMap = (EntityStatMap) ctx.getComponent(entity, EntityStatMap.getComponentType());
+        int healthStat = DefaultEntityStatTypes.getHealth();
+        statMap.subtractStatValue(healthStat, 5.0f);
+        ctx.flush();
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+        CombatAssert.assertHasKnockback(store, entity);
+    }
+}
+```
+
+## StatsAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertStatEquals(store, ref, statType, expected, tolerance)` | Stat value equals expected (within tolerance) |
+| `assertStatEquals(store, ref, statType, expected)` | Stat value equals expected (tolerance 0.01) |
+| `assertStatBetween(store, ref, statType, min, max)` | Stat value is within range (inclusive) |
+| `assertStatAtMax(store, ref, statType)` | Stat is at its maximum |
+| `assertStatAtMin(store, ref, statType)` | Stat is at its minimum |
+| `assertHealthEquals(store, ref, expected)` | Entity health equals expected (tolerance 0.01) |
+| `assertHealthAtMax(store, ref)` | Entity health is at maximum |
+| `assertAlive(store, ref)` | Health > 0 and no DeathComponent |
+| `assertDead(store, ref)` | Entity has DeathComponent |
+| `assertHasModifier(store, ref, statType, modifierId)` | Stat has a named modifier |
+| `assertNoModifier(store, ref, statType, modifierId)` | Stat lacks a named modifier |
+
+## CombatAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertDead(store, ref)` | Delegates to `StatsAssert.assertDead` |
+| `assertAlive(store, ref)` | Delegates to `StatsAssert.assertAlive` |
+| `assertHealthEquals(store, ref, expected)` | Delegates to `StatsAssert.assertHealthEquals` |
+| `assertHealthBelow(store, ref, threshold)` | Assert health is strictly below threshold |
+| `assertHasKnockback(store, ref)` | Assert entity has KnockbackComponent |
+
+## How It Works
+
+Both `StatsAssert` and `CombatAssert` use reflection to access Hytale's stat system:
+
+1. Find the `EntityStatMap` component on the entity
+2. Look up the stat entry for the given `StatType`
+3. Call `get()`, `getMax()`, `getMin()` on the stat entry
+4. For health shortcuts, resolve the `HEALTH` stat type from the `StatTypes` class
+
+<Note>
+The health-related methods (`assertHealthEquals`, `assertAlive`, `assertDead`) automatically locate the `HEALTH` stat type by scanning known class paths. This works with standard Hytale server builds.
+</Note>
+
+## Isolation Recommendation
+
+Combat and stat tests almost always mutate entity state. Use `IsolationStrategy.DEDICATED_WORLD`:
+
+```java
+@HytaleSuite(value = "Combat Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("combat")
+public class CombatTests { }
+```
+
+## Next Steps
+
+- [Inventory & Loot](/surfaces/inventory-and-loot) - item and drop assertions
+- [Effects](/surfaces/effects) - status effect assertions
+- [World Testing](/surfaces/world) - entity spawning and positioning

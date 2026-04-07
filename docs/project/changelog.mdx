@@ -1,0 +1,77 @@
+---
+title: "Changelog"
+description: "Release history for HRTK."
+---
+
+All notable changes to HRTK are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## [4.260326.0] - 2026-04-07
+
+Initial release covering 27 Hytale Server API surfaces with 232 JUnit tests.
+
+### hrtk-api
+
+**Annotations** - 26 annotations for test definition, lifecycle, filtering, parameterization, context requirements, domain shortcuts, and benchmarking.
+
+**Assertions** - 29 assertion classes mapped to Hytale Server API surfaces:
+
+| Assert Class | Hytale API Covered |
+|---|---|
+| `HytaleAssert` | General-purpose (equality, null, exceptions, collections) |
+| `EcsAssert` | Store, Ref, ComponentType, Archetype, entity queries |
+| `EventAssert` | EventRegistry, EventBus, event capture and cancellation |
+| `CommandAssert` | CommandManager, CommandSender, execution and permissions |
+| `CodecAssert` | Codec, BuilderCodec, BSON encode/decode |
+| `WorldAssert` | Universe, World, blocks, ticking, paused state |
+| `UIAssert` | CustomUIPage, UICommandBuilder, event bindings |
+| `StatsAssert` | EntityStatMap, EntityStatValue, stat modifiers, percentage |
+| `CombatAssert` | DamageSystems, DeathComponent, damage causes, knockback |
+| `InventoryAssert` | Inventory, ItemStack, ItemContainer |
+| `LootAssert` | ItemDropList, ItemDrop, drop quantities |
+| `EffectAssert` | EffectControllerComponent, EntityEffect, duration, debuffs |
+| `NPCAssert` | NPCEntity, Role, role existence, despawn state |
+| `BlockAssert` | BlockType, materials, states, triggers |
+| `ItemAssert` | ItemStack, durability, metadata, stackability |
+| `PhysicsAssert` | Velocity, speed, ground detection |
+| `PlayerAssert` | Player entity, game mode, world assignment |
+| `PermissionsAssert` | PermissionHolder, permission checks |
+| `CraftingAssert` | Recipe registry queries |
+| `WeatherAssert` | Weather state, forced weather |
+| `ProjectileAssert` | ProjectileModule availability |
+| `ChunkAssert` | Chunk loading state |
+| `PathfindingAssert` | AStar pathfinding availability |
+| `SchedulingAssert` | World alive state |
+| `PersistenceAssert` | Save paths, player storage |
+| `PluginAssert` | Plugin loading, plugin count |
+| `ChatAssert` | Message content assertions |
+| `AIAssert` | StateEvaluator, AI active/inactive state |
+
+**Contexts** - TestContext, EcsTestContext, WorldTestContext, BenchmarkContext with tick-waiting, entity queries, position operations, mock players, and event capture with proper unregistration.
+
+**Infrastructure** - MockCommandSender, MockPlayerRef, EventCapture with automatic listener cleanup, UICommandCapture, isolation strategies (NONE, SNAPSHOT via TestEntityTracker, DEDICATED_WORLD).
+
+### hrtk-server
+
+**Discovery** - JAR scanning via PluginClassLoader, all 26 annotations recognized, nested class support, annotation indexing, auto re-scan on plugin reload.
+
+**Execution** - Suite/test runner with context injection, world-thread scheduling for entity operations, timeout enforcement on all test types including parameterized, crash protection (catches Throwable), async command execution.
+
+**Thread Safety** - ConcurrentHashMap-based PluginTestRegistry, synchronized ResultCollector, CopyOnWriteArrayList for listeners and event captures, volatile snapshot references, AtomicBoolean concurrent run guard.
+
+**Lifecycle Correctness** - @BeforeAll failure marks all tests ERRORED and still runs @AfterAll/cleanup. @BeforeEach failure marks the test ERRORED and still runs @AfterEach. @AfterEach failure reported as separate ERRORED result. Per-test context cleanup in finally blocks.
+
+**Adapters** - 27 server-side adapters wrapping Hytale internals: ECS, stats, combat, events, commands, inventory, loot, effects, UI, world, codecs, NPCs, blocks, items, physics, players, permissions, crafting, weather, projectiles, chunks, pathfinding, scheduling, persistence, plugins, chat, AI.
+
+**Commands** - `/hrtk run` (async), `list`, `bench` (async), `results`, `scan`, `watch`, `export`. Concurrent run protection. Flexible @RequiresPlugin matching.
+
+**Reporting** - Console output, JSON file export, TestRunListener callbacks.
+
+### hrtk-example-mod
+
+33 test suites demonstrating every HRTK feature across all 27 supported Hytale API surfaces.
+
+---
+
+<Note>
+HRTK is in active development. The API may change between minor versions as Hytale's server API evolves. Pin your `hrtk-api` dependency version to avoid surprises.
+</Note>

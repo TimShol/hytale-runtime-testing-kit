@@ -1,0 +1,181 @@
+---
+title: "Async & Tick Waiting"
+description: "Handle server tick timing with waitTicks(), awaitCondition(), and @AsyncTest for tests that span multiple ticks."
+---
+
+Hytale runs on a tick-based game loop. Many things - entity spawning, damage, loot drops, and component setup - only take effect after one or more ticks. If your test spawns an entity and immediately checks its state, the entity may not be fully set up yet. HRTK provides tools to wait for ticks so your tests can check state at the right time.
+
+<Note>
+Entity names like `Kweebec` and item names used in examples below are from Hytale's default content. Replace them with your mod's actual entity roles and item identifiers.
+</Note>
+
+## Why Tick Waiting Matters
+
+Consider this naive test:
+
+```java
+@WorldTest
+void brokenTest(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    // BUG: The entity was just created. The game loop hasn't processed it yet.
+    // Health and other stats may not be set up until the next tick.
+    StatsAssert.assertAlive(ctx.getStore(), entity); // May fail!
+}
+```
+
+The fix is to wait for the server to tick, giving the game loop time to finish setting up the entity:
+
+```java
+@WorldTest
+void correctTest(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1); // Let the world tick once
+    StatsAssert.assertAlive(ctx.getStore(), entity); // Now safe
+}
+```
+
+## waitTicks()
+
+Pauses the test until the specified number of world ticks have passed. Available on both `EcsTestContext` and `WorldTestContext`.
+
+```java
+// Wait for 1 tick (minimum for most game operations to take effect)
+ctx.waitTicks(1);
+
+// Wait for 5 ticks (enough for most multi-step processes)
+ctx.waitTicks(5);
+
+// Wait for 30 ticks (1 second at 30 TPS - use for slow animations or timers)
+ctx.waitTicks(30);
+```
+
+<Note>
+`waitTicks()` pauses the test thread while the world keeps ticking normally. Your test resumes automatically once the requested number of ticks have passed.
+</Note>
+
+### Async variant
+
+If you need non-blocking tick waiting (for concurrent operations), use `waitTicksAsync()`:
+
+```java
+CompletableFuture<Void> future = ctx.waitTicksAsync(5);
+// Do other setup while ticks elapse
+future.join(); // Block until 5 ticks have passed
+```
+
+## awaitCondition()
+
+Polls a condition every tick until it returns a non-null value, or times out after a maximum number of ticks. This is the preferred way to wait for something to happen without hardcoding tick counts.
+
+```java
+@WorldTest
+void waitForEntityToDie(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+
+    // Apply lethal damage (implementation depends on your game logic)
+    applyDamage(ctx, entity, 9999);
+
+    // Wait up to 100 ticks for the entity to die
+    Boolean isDead = ctx.awaitCondition(
+        () -> hasDeathComponent(ctx.getStore(), entity) ? true : null,
+        100
+    );
+
+    HytaleAssert.assertNotNull("Entity should have died", isDead);
+}
+```
+
+### With custom failure message
+
+```java
+Object loot = ctx.awaitCondition(
+    () -> findDroppedItem(ctx, "Gold_Coin"),
+    60,
+    "Expected gold coin to drop within 60 ticks"
+);
+HytaleAssert.assertNotNull(loot);
+```
+
+<Warning>
+If the condition never returns a non-null value within `maxTicks`, `awaitCondition()` throws a `RuntimeException` with the failure message. The test is reported as `ERRORED`.
+</Warning>
+
+## @AsyncTest
+
+Marks a test as asynchronous. Methods with `@AsyncTest` are discovered and run automatically, just like `@HytaleTest`. The runner will wait up to `timeoutTicks` server ticks for the test to complete. If specified, `timeoutTicks` overrides the default timeout for that test.
+
+```java
+import com.frotty27.hrtk.api.annotation.AsyncTest;
+
+@WorldTest
+@AsyncTest(timeoutTicks = 200)
+void testDelayedSpawn(WorldTestContext ctx) {
+    // Schedule something to happen in 100 ticks
+    scheduleDelayedSpawn(ctx, 100);
+
+    // Wait for it
+    Object entity = ctx.awaitCondition(
+        () -> findEntityByType(ctx, "Delayed_Mob"),
+        150,
+        "Delayed mob should have spawned"
+    );
+
+    HytaleAssert.assertNotNull(entity);
+}
+```
+
+<Tip>
+`@AsyncTest` is useful for tests that depend on game timers, scheduled tasks, or multi-tick processes. The default `timeoutTicks` is 200 (~6.7 seconds at 30 TPS). This acts as a safety net to prevent tests from waiting forever. `@FlowTest(timeoutTicks = N)` works the same way.
+</Tip>
+
+## Common Patterns
+
+<AccordionGroup>
+  <Accordion title="Spawn and verify">
+```java
+@WorldTest
+void spawnAndVerify(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+    HytaleAssert.assertTrue(ctx.entityExists(entity));
+    StatsAssert.assertAlive(ctx.getStore(), entity);
+}
+```
+  </Accordion>
+  <Accordion title="Apply effect and wait">
+```java
+@WorldTest
+void applyPoisonAndWait(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+    applyEffect(ctx, entity, POISON_EFFECT_INDEX);
+    ctx.waitTicks(1);
+    EffectAssert.assertHasEffect(ctx.getStore(), entity, POISON_EFFECT_INDEX);
+}
+```
+  </Accordion>
+  <Accordion title="Wait for loot drop">
+```java
+@FlowTest(timeoutTicks = 200)
+void killAndLoot(WorldTestContext ctx) {
+    Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+    ctx.waitTicks(1);
+    killEntity(ctx, entity);
+
+    List<?> drops = ctx.awaitCondition(
+        () -> collectDrops(ctx, 0, 64, 0),
+        100,
+        "Expected loot to drop after kill"
+    );
+    LootAssert.assertDropsContain(drops, "kweebec_hide");
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+- [Flow Tests](/flows/overview) - multi-step integration tests using tick waiting
+- [World Surface](/surfaces/world) - world context and block/entity operations
+- [ECS Surface](/surfaces/ecs) - ECS assertions and entity queries

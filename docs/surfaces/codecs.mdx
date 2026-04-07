@@ -1,0 +1,122 @@
+---
+title: "Codec Testing"
+description: "Test serialization round-trips, decode correctness, and malformed input handling with CodecAssert."
+---
+
+Hytale uses codecs (encode/decode pairs) to save and load components, send network packets, and persist data. HRTK's `CodecAssert` class lets you verify that your codecs correctly round-trip data and properly reject bad input.
+
+Codec bugs are sneaky - a field that silently disappears when saving, a decode that produces garbage instead of an error, or a round-trip that corrupts precision. These bugs often go unnoticed until a player loads a corrupted save file. Automated codec tests catch them early.
+
+## CodecAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertRoundTrip(codec, value)` | Encode then decode; assert result equals original |
+| `assertRoundTrip(codec, value, equalityCheck)` | Round-trip with custom equality predicate |
+| `assertDecodeEquals(codec, bsonValue, expected)` | Decode and assert result equals expected |
+| `assertDecodeThrows(codec, malformedBson)` | Assert decoding throws an exception |
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.CodecAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Codec Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("codec")
+public class CodecSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("TransformComponent survives encode-decode round-trip")
+    void transformRoundTrip() {
+        // The most common codec test: encode, decode, compare.
+        // assertRoundTrip calls codec.encode(value) then codec.decode(encoded)
+        // and compares with Objects.equals().
+        TransformComponent transform = new TransformComponent();
+        CodecAssert.assertRoundTrip(TransformComponent.CODEC, transform);
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Round-trip with custom equality check")
+    void roundTripWithCustomEquality() {
+        // If your type does not implement equals() correctly, or you want
+        // partial comparison, provide a custom BiPredicate.
+        TransformComponent transform = new TransformComponent();
+        CodecAssert.assertRoundTrip(TransformComponent.CODEC, transform,
+            (a, b) -> a != null && b != null
+        );
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Decode specific BSON value and verify result")
+    void decodeSpecificValue() {
+        // Test that decoding a known BSON document produces the expected object.
+        BsonDocument doc = new BsonDocument("x", new BsonInt32(10));
+        CodecAssert.assertDecodeEquals(PositionCodec.INSTANCE, doc, new Position(10, 0, 0));
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Codec rejects null input")
+    void codecRejectsNull() {
+        // Verify that your codec throws on null rather than silently producing garbage.
+        CodecAssert.assertDecodeThrows(TransformComponent.CODEC, null);
+    }
+
+    @HytaleTest
+    @Order(5)
+    @DisplayName("Codec rejects invalid input type")
+    void codecRejectsInvalidType() {
+        // Verify that passing a string where BSON is expected throws an exception.
+        CodecAssert.assertDecodeThrows(TransformComponent.CODEC, "not-a-bson-value");
+    }
+
+    @HytaleTest
+    @Order(6)
+    @DisplayName("Codec static field exists on component class")
+    void codecFieldExists() {
+        // Smoke test - verify the CODEC field is present and non-null.
+        HytaleAssert.assertNotNull(
+            "TransformComponent.CODEC should not be null",
+            TransformComponent.CODEC
+        );
+    }
+}
+```
+
+<Warning>
+If `assertDecodeThrows` does NOT get an error, the test fails with "Expected decode to throw but it succeeded". This catches codecs that silently accept bad input instead of rejecting it, which could lead to corrupted data.
+</Warning>
+
+## How It Works Internally
+
+`CodecAssert` automatically finds and calls the `encode()` and `decode()` methods on your codec. It works with any codec that follows the standard Hytale pattern.
+
+<Note>
+The codec parameter is typed as `Object` in the API so your mod doesn't need the server JAR at compile time. At runtime, pass a Hytale `Codec<T>` instance.
+</Note>
+
+## When to Test Codecs
+
+Codec tests are essential when:
+
+- You define custom components with serialization logic
+- You modify existing component codecs
+- You need regression tests for data persistence formats
+- You want to verify backward compatibility after schema changes
+
+## Next Steps
+
+- [ECS Testing](/surfaces/ecs) - test component serialization in context
+- [Benchmarks](/surfaces/benchmarks) - measure codec performance

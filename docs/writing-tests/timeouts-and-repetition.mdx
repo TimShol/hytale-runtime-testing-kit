@@ -1,0 +1,156 @@
+---
+title: "Timeouts & Repetition"
+description: "Control test time limits with @Timeout and run tests multiple times with @RepeatedTest."
+---
+
+Some tests need explicit time limits (to catch hangs or slow operations), while others need to run multiple times to verify consistency. HRTK provides `@Timeout` and `@RepeatedTest` for these scenarios.
+
+## @Timeout
+
+Every test has a default timeout of **30 seconds**. If your test completes within that window, you never need to think about timeouts. But if you need a tighter or looser limit, use `@Timeout`.
+
+```java
+import com.frotty27.hrtk.api.annotation.Timeout;
+import java.util.concurrent.TimeUnit;
+
+@HytaleTest
+@Timeout(5) // 5 seconds (default unit is seconds)
+void testQuickOperation() {
+    // Must complete within 5 seconds
+    HytaleAssert.assertTrue(performQuickCheck());
+}
+
+@HytaleTest
+@Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+void testVeryQuickOperation() {
+    // Must complete within 500ms
+    HytaleAssert.assertNotNull(lookup("cached_value"));
+}
+
+@HytaleTest
+@Timeout(value = 2, unit = TimeUnit.MINUTES)
+void testSlowWorldGeneration() {
+    // Allow up to 2 minutes for a heavy world operation
+    generateAndValidateChunk();
+}
+```
+
+### What happens on timeout
+
+When a test exceeds its timeout, the runner reports it as `TIMED_OUT`:
+
+```
+    [TIME] testSlowWorldGeneration (120003ms)
+           Timed out after 120000ms
+```
+
+<Warning>
+Timeouts on world-bound tests (`@WorldTest`, `@EcsTest`) are especially important. Because these tests run on the world thread, a stuck test would stall the entire world's tick loop. The timeout ensures the runner gives up and moves on, preserving server stability.
+</Warning>
+
+### Supported time units
+
+The `unit` parameter accepts any `java.util.concurrent.TimeUnit` value:
+
+| Unit | Example |
+|---|---|
+| `TimeUnit.MILLISECONDS` | `@Timeout(value = 200, unit = TimeUnit.MILLISECONDS)` |
+| `TimeUnit.SECONDS` | `@Timeout(5)` (default unit) |
+| `TimeUnit.MINUTES` | `@Timeout(value = 2, unit = TimeUnit.MINUTES)` |
+
+## @RepeatedTest
+
+Run the same test method multiple times. Each repetition is reported as a separate result. This is useful for detecting flaky behavior, race conditions, or probabilistic logic.
+
+```java
+import com.frotty27.hrtk.api.annotation.RepeatedTest;
+
+@RepeatedTest(5)
+void testRandomLootDrop() {
+    // Runs 5 times -- each execution is independent
+    float roll = Math.random();
+    HytaleAssert.assertTrue("Roll should be in [0, 1)", roll >= 0.0 && roll < 1.0);
+}
+```
+
+### Output
+
+Each repetition appears as its own result:
+
+```
+    [PASS] testRandomLootDrop (1ms)
+    [PASS] testRandomLootDrop (0ms)
+    [PASS] testRandomLootDrop (0ms)
+    [PASS] testRandomLootDrop (1ms)
+    [PASS] testRandomLootDrop (0ms)
+```
+
+<Note>
+`@RepeatedTest` implies `@HytaleTest` - you do not need both annotations. The `value` parameter specifies the number of repetitions.
+</Note>
+
+<Warning>
+`@RepeatedTest(0)` is invalid and will be reported as `ERRORED` at discovery time. The repetition count must be at least 1. Similarly, `@ParameterizedTest` without a `@ValueSource` annotation will be reported as `ERRORED` rather than silently skipped.
+</Warning>
+
+### Combining with @BeforeEach / @AfterEach
+
+Lifecycle hooks run for every repetition, so each iteration gets a clean setup:
+
+```java
+@HytaleSuite("Flaky Detection Tests")
+public class FlakyTests {
+
+    private int attempt;
+
+    @BeforeEach
+    void resetAttempt() {
+        attempt = 0;
+    }
+
+    @RepeatedTest(10)
+    void testAlwaysStartsAtZero() {
+        HytaleAssert.assertEquals(0, attempt);
+        attempt++; // This increment is reset before next repetition
+    }
+}
+```
+
+### Combining with --fail-fast
+
+When `--fail-fast` is enabled and a repeated test fails on any iteration, the remaining repetitions are skipped:
+
+```
+/hrtk run --fail-fast
+```
+
+```
+    [PASS] testFlaky (1ms)
+    [PASS] testFlaky (0ms)
+    [FAIL] testFlaky (1ms)
+           Expected true but was false
+    // Remaining 7 repetitions skipped
+```
+
+## Combining @Timeout and @RepeatedTest
+
+You can use both annotations together. The timeout applies to each individual repetition.
+
+```java
+@RepeatedTest(3)
+@Timeout(value = 100, unit = TimeUnit.MILLISECONDS)
+void testFastOperation() {
+    // Each of the 3 repetitions must complete within 100ms
+    HytaleAssert.assertNotNull(quickLookup());
+}
+```
+
+<Tip>
+Use `@RepeatedTest` with a tight `@Timeout` to stress-test performance-sensitive code paths. If any of the repetitions times out, you know your code has worst-case latency issues.
+</Tip>
+
+## Next Steps
+
+- [Async & Tick Waiting](/writing-tests/async-and-tick-waiting) - handle server tick timing
+- [Parameterized Tests](/writing-tests/parameterized-tests) - run tests with multiple data inputs
+- [Benchmarks](/surfaces/benchmarks) - dedicated performance measurement

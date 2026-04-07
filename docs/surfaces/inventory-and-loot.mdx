@@ -1,0 +1,198 @@
+---
+title: "Inventory & Loot"
+description: "Test inventory slots, item stacks, and loot drop lists with InventoryAssert and LootAssert."
+---
+
+HRTK provides two assertion classes for item-related testing: `InventoryAssert` for verifying inventory contents by section and slot, and `LootAssert` for verifying drop lists after entity kills or loot table rolls.
+
+Inventory and loot testing catches bugs that are easy to miss manually - items placed in the wrong slot, stacks that exceed their maximum, loot tables that drop nothing, or equipment that fails to appear in the armor section. Automated tests verify these mechanics consistently across every build.
+
+<Note>
+Item IDs and drop list IDs used in examples depend on the game's item registry. Replace with your mod's actual item and drop list identifiers.
+</Note>
+
+## Inventory Section Constants
+
+Inventories in Hytale are divided into sections. HRTK defines constants for the three standard sections:
+
+| Constant | Value | Description |
+|---|---|---|
+| `SECTION_STORAGE` | 0 | Main storage area (backpack, general inventory) |
+| `SECTION_ARMOR` | 1 | Armor equipment slots (helmet, chestplate, leggings, boots) |
+| `SECTION_HOTBAR` | 2 | Hotbar slots (quick-access items the player can switch between) |
+
+These constants keep your test code readable. Instead of writing magic numbers like `0` or `2`, you write `InventoryAssert.SECTION_HOTBAR`.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.FlowTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.InventoryAssert;
+import com.frotty27.hrtk.api.assert_.LootAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.util.Collections;
+import java.util.List;
+
+@HytaleSuite(value = "Inventory and Loot Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("inventory")
+public class InventoryAndLootSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Newly spawned NPC has an empty inventory")
+    void newEntityHasEmptyInventory(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        // Retrieve the inventory component from the entity.
+        Object inventory = ctx.getInventory(entity);
+
+        // A freshly spawned NPC with no pre-configured loadout should have
+        // an empty inventory across all sections.
+        InventoryAssert.assertInventoryEmpty(inventory);
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Verify item in a specific hotbar slot")
+    void hotbarSlotContainsItem(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Outlander_Hunter", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        // Give the entity a sword in the first hotbar slot.
+        ctx.giveItem(entity, "Weapon_Sword_Iron", 1);
+        ctx.waitTicks(1);
+
+        Object inventory = ctx.getInventory(entity);
+
+        // assertSlotContains checks a specific section + slot for an item type and count.
+        InventoryAssert.assertSlotContains(
+            inventory,
+            InventoryAssert.SECTION_HOTBAR,
+            0,
+            "Weapon_Sword_Iron",
+            1
+        );
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Search for an item across all inventory sections")
+    void inventoryContainsItemAnywhere(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Kweebec_Sapling", 20, 64, 20);
+        ctx.waitTicks(1);
+
+        ctx.giveItem(entity, "Gold_Coin", 5);
+        ctx.waitTicks(1);
+
+        Object inventory = ctx.getInventory(entity);
+
+        // assertInventoryContains searches all sections for the item.
+        // It does not care which slot the item ended up in.
+        InventoryAssert.assertInventoryContains(inventory, "Gold_Coin");
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Verify item stack properties")
+    void itemStackHasCorrectProperties(WorldTestContext ctx) {
+        Object stack = ctx.createStack("Iron_Ingot", 32);
+
+        // assertItemStackEquals checks both the item ID and the quantity.
+        InventoryAssert.assertItemStackEquals(stack, "Iron_Ingot", 32);
+    }
+
+    @FlowTest
+    @Order(5)
+    @DisplayName("Killed NPC drops expected loot")
+    void killedNPCDropsLoot(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 30, 64, 30);
+        ctx.waitTicks(1);
+
+        // Kill the entity and wait for loot to drop.
+        ctx.dealDamage(entity, 99999.0f, "GENERIC");
+        List<?> drops = ctx.awaitCondition(
+            () -> ctx.collectDrops(30, 64, 30), 60
+        );
+
+        // Verify the drop list contains at least one item.
+        HytaleAssert.assertNotNull("Drops should not be null", drops);
+        LootAssert.assertDropsContain(drops, "Bone");
+    }
+
+    @FlowTest
+    @Order(6)
+    @DisplayName("Loot table produces correct number of stacks")
+    void lootTableDropCountInRange(WorldTestContext ctx) {
+        List<?> drops = ctx.rollLootTable("mymod:standard_chest");
+
+        // assertDropCountBetween is ideal for randomized loot tables.
+        // It verifies the count falls within the expected range.
+        LootAssert.assertDropCountBetween(drops, 2, 5);
+    }
+
+    @HytaleTest
+    @Order(7)
+    @DisplayName("Peaceful entity drops nothing on death")
+    void peacefulEntityDropsNothing() {
+        List<?> drops = Collections.emptyList();
+        LootAssert.assertNoDrops(drops);
+    }
+}
+```
+
+## InventoryAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertSlotContains(inventory, section, slot, itemId, quantity)` | Slot has expected item and count |
+| `assertSlotEmpty(inventory, section, slot)` | Slot is empty |
+| `assertInventoryContains(inventory, itemId)` | Any slot in any section has the item |
+| `assertInventoryEmpty(inventory)` | All slots in all sections are empty |
+| `assertItemStackEquals(stack, itemId, quantity)` | Item stack matches expected values |
+
+## LootAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertDropsContain(drops, itemId)` | Drops include at least one stack of the item |
+| `assertDropsContain(drops, itemId, minQuantity)` | Drops include the item with at least N total |
+| `assertDropCount(drops, expected)` | Drops list has exactly N stacks |
+| `assertDropCountBetween(drops, min, max)` | Drop count is within range (inclusive) |
+| `assertNoDrops(drops)` | Drops list is empty |
+
+## Inventory Testing Patterns
+
+Inventory tests follow a consistent pattern:
+
+1. **Spawn** an NPC that has an inventory component
+2. **Give** items using `ctx.giveItem(entity, itemId, count)`
+3. **Retrieve** the inventory with `ctx.getInventory(entity)`
+4. **Assert** on slots, sections, or the whole inventory
+
+For loot tests, the pattern is slightly different:
+
+1. **Spawn** an NPC, then **kill** it
+2. **Collect** drops using `ctx.awaitCondition(() -> ctx.collectDrops(...), maxTicks)`
+3. **Assert** on the drop list contents
+
+<Tip>
+When testing randomized loot, use `@RepeatedTest` to run the test multiple times and catch edge cases in drop distributions. Combine with `assertDropCountBetween` for range-based validation.
+</Tip>
+
+## Next Steps
+
+- [Effects](/surfaces/effects) - status effect assertions
+- [Stats & Combat](/surfaces/stats-and-combat) - health and damage checks
+- [Flow Tests](/flows/overview) - multi-step spawn-kill-loot flows

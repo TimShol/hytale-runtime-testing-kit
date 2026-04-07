@@ -1,0 +1,136 @@
+---
+title: "UI Testing"
+description: "Test server-side UI pages, command captures, and element operations with UIAssert and UITestAdapter."
+---
+
+Hytale's server-side UI system sends commands to the client to build and update pages. HRTK intercepts these commands during tests, letting you verify that your UI logic sends the correct instructions without needing a real client connection.
+
+UI testing catches layout bugs, missing sections, and incorrect data bindings before they reach players. Since the server drives the UI through commands, you can verify the complete page structure without rendering anything.
+
+## Core Concepts
+
+- **UICommandCapture** - records all UI commands (SET, APPEND, REMOVE) sent during a test
+- **UIAssert** - asserts on the captured commands
+- **UITestAdapter** - server-side adapter that creates captures from page builds
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.UIAssert;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+import com.frotty27.hrtk.api.mock.UICommandCapture;
+
+@HytaleSuite(value = "UI Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("ui")
+public class UISurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Settings page has all expected sections")
+    void settingsPageStructure() {
+        UICommandCapture capture = buildSettingsPage();
+
+        UIAssert.assertHasCommands(capture);
+        UIAssert.assertCommandSent(capture, "settings.graphics", "SET");
+        UIAssert.assertCommandSent(capture, "settings.audio", "SET");
+        UIAssert.assertCommandSent(capture, "settings.controls", "SET");
+        UIAssert.assertPageAppended(capture, "settings.sections");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Player info page sets player name")
+    void playerInfoPageSetsName() {
+        UICommandCapture capture = buildPlayerInfoPage("Frotty27");
+
+        UIAssert.assertCommandSent(capture, "player.name", "SET");
+        UIAssert.assertCommandSentWithValue(capture, "player.name", "Frotty27");
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Inventory page appends item section")
+    void inventoryPageAppendsItems() {
+        UICommandCapture capture = buildInventoryPage();
+
+        UIAssert.assertPageAppended(capture, "inventory.items");
+        UIAssert.assertCommandSent(capture, "inventory.header", "SET");
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Empty page sends no commands")
+    void emptyPageSendsNoCommands() {
+        UICommandCapture capture = buildEmptyPage();
+        UIAssert.assertCommandCount(capture, 0);
+    }
+
+    @HytaleTest
+    @Order(5)
+    @DisplayName("UI command capture API basics")
+    void uiCaptureApiBasics() {
+        UICommandCapture capture = createEmptyCapture();
+        UIAssert.assertCommandCount(capture, 0);
+        HytaleAssert.assertFalse(
+            "Empty capture should not have any commands",
+            capture.hasCommand("any.path", "SET")
+        );
+    }
+}
+```
+
+## UICommandCapture Interface
+
+| Method | Description |
+|---|---|
+| `getCommands()` | Get all captured UI command records |
+| `hasCommand(path, operation)` | Check if a command was sent for the path with the operation |
+| `hasSet(path, value)` | Check if a SET command was sent with the given value |
+| `getCount()` | Total number of captured commands |
+
+## UIAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertCommandSent(capture, path, operation)` | Assert a command was sent for path + operation |
+| `assertCommandSentWithValue(capture, path, value)` | Assert a SET command with specific value |
+| `assertPageAppended(capture, pagePath)` | Assert an APPEND operation at the path |
+| `assertHasCommands(capture)` | Assert at least one command was captured |
+| `assertCommandCount(capture, expected)` | Assert exact number of captured commands |
+
+## UITestAdapter
+
+The `UITestAdapter` on the server side bridges between your page-building code and the test capture system. It intercepts the `PageManager` command stream and records every command that would normally be sent to the client.
+
+```java
+// Server-side usage (inside hrtk-server)
+UITestAdapter adapter = new UITestAdapter();
+UICommandCapture capture = adapter.buildPage(pageManager, playerRef, store, myPage);
+```
+
+<Note>
+In your test code, you typically do not interact with `UITestAdapter` directly. Instead, write helper methods in your test suite that invoke your page-building logic and return the captured commands.
+</Note>
+
+## When to Test UI
+
+UI tests are most useful when:
+
+- Your mod builds complex server-driven UI pages
+- You need to verify page structure without a connected client
+- You want regression tests for UI layout changes
+- You implement data-binding where server values populate UI fields
+
+## Next Steps
+
+- [Networking](/surfaces/networking) - packet round-trip testing
+- [Command Testing](/surfaces/commands) - test commands with mock senders
+- [Event Testing](/surfaces/events) - capture and verify events

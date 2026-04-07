@@ -1,0 +1,87 @@
+---
+title: "Chunks"
+description: "Test chunk loading state and chunk operations."
+---
+
+The Chunks surface provides methods for checking whether chunks are loaded and asserting on chunk state. Use `ChunkTestAdapter` to query chunk status and `ChunkAssert` to verify loading expectations.
+
+Chunk testing matters when your mod relies on chunks being loaded before performing operations - spawning entities, placing blocks, or running world queries. A test that assumes a chunk is loaded when it is not can produce false positives or cryptic failures. Chunk assertions make these dependencies explicit.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.ChunkAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Chunk Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("chunks")
+public class ChunkSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Chunk at spawn origin is loaded after entity spawn")
+    void chunkLoadedAtSpawn(WorldTestContext ctx) {
+        // Spawning an entity forces the chunk at that position to load.
+        ctx.spawnNPC("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(5);
+
+        // Chunk coordinates are block coordinates divided by chunk size.
+        // Block (0, 64, 0) falls in chunk (0, 0).
+        ChunkAssert.assertChunkLoaded(ctx.getWorld(), 0, 0);
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Distant chunk is not loaded")
+    void distantChunkNotLoaded(WorldTestContext ctx) {
+        // A chunk far from any entity or player should not be loaded.
+        // Chunk (1000, 1000) is very far from the origin.
+        ChunkAssert.assertChunkNotLoaded(ctx.getWorld(), 1000, 1000);
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Placing a block loads the containing chunk")
+    void blockPlacementLoadsChunk(WorldTestContext ctx) {
+        // Place a block at (160, 64, 160), which falls in chunk (10, 10).
+        ctx.setBlock(160, 64, 160, "Rock_Sandstone");
+        ctx.waitTicks(5);
+
+        ChunkAssert.assertChunkLoaded(ctx.getWorld(), 10, 10);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `isChunkLoaded` | `Object world, int chunkX, int chunkZ` | `boolean` | Check if the chunk at the given chunk coordinates is loaded |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertChunkLoaded` | `Object world, int chunkX, int chunkZ` | "Expected chunk [chunkX, chunkZ] to be loaded" |
+| `assertChunkNotLoaded` | `Object world, int chunkX, int chunkZ` | "Expected chunk [chunkX, chunkZ] to not be loaded" |
+
+## Key Details
+
+- Chunk coordinates are **block coordinates divided by chunk size**, not raw block positions. Block (160, 64, 160) with a chunk size of 16 falls in chunk (10, 10).
+- Spawning an entity or placing a block **may trigger chunk loading** - wait a few ticks before asserting.
+- Use `assertChunkNotLoaded` to verify that chunks outside the active area are properly unloaded, which is important for memory testing.
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - block and entity operations
+- [Blocks](/surfaces/blocks) - block placement and type verification
+- [Scheduling](/surfaces/scheduling) - world thread execution

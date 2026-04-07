@@ -1,0 +1,96 @@
+---
+title: "Scheduling"
+description: "Test world thread execution and world alive state."
+---
+
+The Scheduling surface lets you dispatch tasks to the world thread and assert that a world is actively running. `SchedulingTestAdapter` provides world-thread execution, while `SchedulingAssert` offers a targeted check for world liveness.
+
+Scheduling tests are important for mods that dispatch asynchronous work onto the world thread. If the world is not alive or the scheduling mechanism is broken, those dispatched tasks silently fail. These tests verify that the scheduling infrastructure works correctly.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.SchedulingAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Scheduling Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("scheduling")
+public class SchedulingSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Test world is alive and running")
+    void worldIsAlive(WorldTestContext ctx) {
+        // assertWorldAlive checks that the world's isAlive() or isRunning() method
+        // returns true. A dead world cannot process ticks or scheduled tasks.
+        SchedulingAssert.assertWorldAlive(ctx.getWorld());
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Task can be dispatched to the world thread")
+    void dispatchTaskToWorldThread(WorldTestContext ctx) {
+        // executeOnWorldThread dispatches a Runnable onto the world's execution thread.
+        // Returns true if the dispatch succeeded.
+        boolean dispatched = SchedulingTestAdapter.executeOnWorldThread(
+            ctx.getWorld(),
+            () -> {
+                // This runs on the world thread, not the test thread.
+                // You can do world operations here safely.
+            }
+        );
+
+        HytaleAssert.assertTrue("Task should be dispatched successfully", dispatched);
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Scheduling API is available")
+    void schedulingApiAvailable(WorldTestContext ctx) {
+        // schedulingAvailable checks if the World class exposes an execute() method.
+        HytaleAssert.assertTrue(
+            "Scheduling API should be available",
+            SchedulingTestAdapter.schedulingAvailable()
+        );
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `executeOnWorldThread(Object world, Runnable task)` | `boolean` | Dispatch a task onto the world's execution thread |
+| `schedulingAvailable()` | `boolean` | Check if the World class exposes an `execute()` method |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertWorldAlive(Object world)` | "Expected world to be alive but it was not" |
+
+## When to Test Scheduling
+
+Scheduling tests are most valuable when:
+
+- Your mod dispatches work to the world thread from async handlers
+- You need to verify that the world is alive before running game logic
+- You are building plugins that depend on the scheduling API being available
+- You want to catch issues where a dedicated test world fails to start
+
+Pair with `IsolationStrategy.DEDICATED_WORLD` when you need a guaranteed-alive world for scheduling tests.
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - world operations and tick waiting
+- [Chunks](/surfaces/chunks) - chunk loading depends on world scheduling
+- [Persistence](/surfaces/persistence) - world save operations

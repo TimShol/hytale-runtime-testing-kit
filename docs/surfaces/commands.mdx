@@ -1,0 +1,190 @@
+---
+title: "Command Testing"
+description: "Test command execution, output verification, and permissions with CommandAssert and MockCommandSender."
+---
+
+Most Hytale plugins register custom commands. HRTK lets you execute commands programmatically with a `MockCommandSender`, inspect the output messages, and assert on success or failure - all without a real player connection.
+
+The `MockCommandSender` is the key tool here. It acts as a fake player or console sender that captures every message the command sends back. You can configure its permissions to test both authorized and unauthorized access, and you can inspect the captured messages to verify the command produced the right output.
+
+## How MockCommandSender Message Capture Works
+
+When a command handler calls `sender.sendMessage("some text")`, the real server sends that message over the network to the client. With a `MockCommandSender`, the message is instead stored in an internal list. After the command executes, you can read `sender.getMessages()` to see everything the command sent, `sender.getLastMessage()` for the most recent output, or `sender.hasReceivedMessage("substring")` to search through all captured messages.
+
+This approach lets you test command output without parsing network packets or connecting a real client.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.RequiresPlayer;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.CommandAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.context.TestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+import com.frotty27.hrtk.api.mock.MockCommandSender;
+
+@HytaleSuite(value = "Command Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("commands")
+public class CommandSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Create a mock sender with admin permissions")
+    void createSenderWithPermissions(TestContext ctx) {
+        // createCommandSender accepts a varargs list of permission nodes.
+        // The sender starts with exactly these permissions and nothing else.
+        MockCommandSender admin = ctx.createCommandSender("hrtk.admin", "mymod.manage");
+
+        HytaleAssert.assertNotNull("Sender should not be null", admin);
+        HytaleAssert.assertTrue(
+            "Sender should have hrtk.admin permission",
+            admin.hasPermission("hrtk.admin")
+        );
+        HytaleAssert.assertTrue(
+            "Sender should have mymod.manage permission",
+            admin.hasPermission("mymod.manage")
+        );
+        HytaleAssert.assertFalse(
+            "Sender should not have ungranted permission",
+            admin.hasPermission("ungranted.perm")
+        );
+    }
+
+    @HytaleTest
+    @RequiresPlayer
+    @Order(2)
+    @DisplayName("Execute a command and verify output messages")
+    void executeCommandAndCheckOutput(TestContext ctx) {
+        MockCommandSender sender = ctx.createCommandSender("hrtk.admin");
+
+        // Execute the /hrtk list command through the real command system.
+        // The command handler sends messages to the sender, which captures them.
+        ctx.executeCommand("/hrtk list", sender);
+
+        // Verify the sender received at least one message.
+        HytaleAssert.assertNotEmpty(sender.getMessages());
+
+        // Check that the output contains expected keywords.
+        CommandAssert.assertSenderReceivedMessage(sender, "Suite:");
+    }
+
+    @HytaleTest
+    @RequiresPlayer
+    @Order(3)
+    @DisplayName("Command succeeds with correct permissions")
+    void commandSucceedsWithPermission(TestContext ctx) {
+        MockCommandSender sender = ctx.createCommandSender("hrtk.admin");
+
+        // assertCommandSucceeds executes the command and asserts it does not throw.
+        // If the command throws an exception, the test fails with the exception details.
+        CommandAssert.assertCommandSucceeds(ctx, sender, "/hrtk list");
+    }
+
+    @HytaleTest
+    @RequiresPlayer
+    @Order(4)
+    @DisplayName("Command fails without required permissions")
+    void commandFailsWithoutPermission(TestContext ctx) {
+        // Create a sender with NO permissions.
+        MockCommandSender sender = ctx.createCommandSender();
+
+        // assertCommandFails executes the command and asserts it throws an exception.
+        // This is how you verify that your permission checks actually work.
+        CommandAssert.assertCommandFails(ctx, sender, "/hrtk run");
+    }
+
+    @HytaleTest
+    @RequiresPlayer
+    @Order(5)
+    @DisplayName("Verify permission denial produces error message")
+    void permissionDenialMessage(TestContext ctx) {
+        MockCommandSender sender = ctx.createCommandSender();
+
+        // Execute a command that requires permissions the sender does not have.
+        ctx.executeCommand("/hrtk run", sender);
+
+        // The command handler should have sent an error message about missing permissions.
+        CommandAssert.assertSenderReceivedMessage(sender, "permission");
+    }
+
+    @HytaleTest
+    @Order(6)
+    @DisplayName("Permissions can be added and removed dynamically")
+    void dynamicPermissionChanges(TestContext ctx) {
+        MockCommandSender sender = ctx.createCommandSender();
+
+        // Start with no permissions, then grant one.
+        sender.addPermission("mymod.admin");
+        HytaleAssert.assertTrue("Permission should be granted", sender.hasPermission("mymod.admin"));
+
+        // Revoke it and verify it is gone.
+        sender.removePermission("mymod.admin");
+        HytaleAssert.assertFalse("Permission should be revoked", sender.hasPermission("mymod.admin"));
+    }
+
+    @HytaleTest
+    @RequiresPlayer
+    @Order(7)
+    @DisplayName("Verify exact message count from command output")
+    void exactMessageCount(TestContext ctx) {
+        MockCommandSender sender = ctx.createCommandSender("hrtk.admin");
+        ctx.executeCommand("/hrtk list", sender);
+
+        // assertSenderReceivedMessageCount verifies the exact number of messages.
+        // This is useful for commands that should produce a fixed number of output lines.
+        int messageCount = sender.getMessages().size();
+        CommandAssert.assertSenderReceivedMessageCount(sender, messageCount);
+    }
+}
+```
+
+## MockCommandSender Methods
+
+| Method | Description |
+|---|---|
+| `getMessages()` | All messages sent to this sender, in order |
+| `getLastMessage()` | Last message sent, or null |
+| `hasReceivedMessage(substring)` | Check if any message contains the substring |
+| `clearMessages()` | Clear all captured messages |
+| `getPermissions()` | Get the set of granted permissions |
+| `hasPermission(perm)` | Check for a specific permission |
+| `addPermission(perm)` | Grant a permission |
+| `removePermission(perm)` | Revoke a permission |
+| `getName()` | Display name of the sender |
+
+## CommandAssert Methods
+
+| Method | Description |
+|---|---|
+| `assertCommandSucceeds(ctx, sender, cmd)` | Execute command and assert no exception |
+| `assertCommandFails(ctx, sender, cmd)` | Execute command and assert it throws |
+| `assertCommandFailsWithMessage(ctx, sender, cmd, msg)` | Assert failure contains expected message |
+| `assertSenderReceivedMessage(sender, substring)` | Assert sender got a message containing text |
+| `assertSenderReceivedMessageCount(sender, count)` | Assert sender received exactly N messages |
+
+## Executing Commands
+
+Besides using `CommandAssert`, you can execute commands directly through the context:
+
+```java
+ctx.executeCommand("/mymod give diamond_sword 1", sender);
+```
+
+The command string is dispatched through the server's command system. The `sender` receives any output messages that the command sends.
+
+<Note>
+`executeCommand()` dispatches through the real Hytale command system. If the command is not registered or the sender lacks permission, the behavior matches what would happen in production.
+</Note>
+
+## Next Steps
+
+- [Event Testing](/surfaces/events) - capture and verify events
+- [Codec Testing](/surfaces/codecs) - test serialization round-trips
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - filter tests by tag

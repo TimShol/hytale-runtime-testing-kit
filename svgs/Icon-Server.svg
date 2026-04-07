@@ -1,0 +1,42 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="orange" x1="0" y1="370" x2="0" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB347"/>
+      <stop offset="0.5" stop-color="#FF8C00"/>
+      <stop offset="1" stop-color="#C45A00"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="48" fill="#0D1421"/>
+  <path d="M80,140 L80,80 L140,80" stroke="#2D3748" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M372,80 L432,80 L432,140" stroke="#2D3748" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M80,372 L80,432 L140,432" stroke="#2D3748" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M372,432 L432,432 L432,372" stroke="#2D3748" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="160" font-family="monospace" font-size="72" font-weight="700" fill="#4DD0E1" text-anchor="middle" letter-spacing="12">HRTK</text>
+  <line x1="130" y1="185" x2="382" y2="185" stroke="#2D3748" stroke-width="3"/>
+  <polyline points="175,314 225,373 345,243" stroke="#22C55E" stroke-width="30" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(390,390) scale(.4)">
+    <circle r="58" fill="none" stroke="#0D1421" stroke-width="8"/>
+    <g fill="url(#orange)">
+      <rect x="-16" y="-70" width="32" height="34"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(45)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(90)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(135)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(180)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(225)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(270)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(315)"/>
+    </g>
+    <g fill="none" stroke="#0D1421" stroke-width="8">
+      <rect x="-16" y="-70" width="32" height="34"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(45)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(90)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(135)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(180)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(225)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(270)"/>
+      <rect x="-16" y="-70" width="32" height="34" transform="rotate(315)"/>
+    </g>
+    <circle r="54" fill="url(#orange)"/>
+    <circle r="23" fill="#0D1421" stroke="#0D1421" stroke-width="8"/>
+  </g>
+</svg>

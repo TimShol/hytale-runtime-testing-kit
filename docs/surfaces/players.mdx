@@ -1,0 +1,101 @@
+---
+title: "Players"
+description: "Test player entities, game modes, mock players, and world assignment."
+---
+
+The Players surface lets you create mock player entities for testing without a real client connection. `PlayerTestAdapter` provides mock player creation and property access, while `PlayerAssert` verifies game mode, name, world assignment, and alive state.
+
+Testing player logic without real clients is essential for CI/CD pipelines and automated regression testing. Mock players let you verify game mode switches, world assignments, and player-specific permissions entirely on the server side.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PlayerAssert;
+import com.frotty27.hrtk.api.context.TestContext;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Player Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("players")
+public class PlayerSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Create a mock player and verify its name")
+    void createMockPlayerAndVerifyName(TestContext ctx) {
+        Object player = ctx.createMockPlayer("Frotty27");
+
+        PlayerAssert.assertPlayerName(player, "Frotty27");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Verify game mode on a mock player")
+    void verifyGameMode(TestContext ctx) {
+        Object player = ctx.createMockPlayer("ArenaPlayer");
+
+        PlayerAssert.assertGameMode(player, "creative");
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Mock player is assigned to the test world")
+    void playerIsInTestWorld(WorldTestContext ctx) {
+        Object player = ctx.createMockPlayer("WorldTester");
+
+        PlayerAssert.assertPlayerInWorld(player, "overworld");
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Mock player is alive after creation")
+    void mockPlayerIsAlive(WorldTestContext ctx) {
+        Object player = ctx.createMockPlayer("HealthyPlayer");
+
+        PlayerAssert.assertPlayerAlive(ctx.getStore(), player);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `createMockPlayer` | `String name` | `Object` | Create a mock player entity with the given name |
+| `getPlayerName` | `Object player` | `String` | Get the player's display name |
+| `getGameMode` | `Object player` | `String` | Get the player's current game mode |
+| `getPlayerWorld` | `Object player` | `Object` | Get the world the player is assigned to |
+| `isPlayerAlive` | `Object player` | `boolean` | Check if the player entity is alive |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertGameMode` | `Object player, String expected` | "Expected game mode [expected] but was [actual]" |
+| `assertPlayerName` | `Object player, String expected` | "Expected player name [expected] but was [actual]" |
+| `assertPlayerInWorld` | `Object player, String expectedWorldName` | "Expected player to be in the given world" |
+| `assertPlayerAlive` | `Object store, Object ref` | "Expected player to be alive" |
+
+## When to Test Players
+
+Player tests are valuable when your mod:
+
+- Implements game mode switches (survival to creative, custom modes)
+- Assigns players to specific worlds (lobbies, dungeons, arenas)
+- Has player-specific logic that needs verification without real clients
+- Combines with permission checks (see [Permissions](/surfaces/permissions))
+
+## Next Steps
+
+- [Permissions](/surfaces/permissions) - test permission checks on mock players
+- [Commands](/surfaces/commands) - test commands with mock senders
+- [World Testing](/surfaces/world) - entity positioning in worlds

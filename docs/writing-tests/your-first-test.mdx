@@ -1,0 +1,164 @@
+---
+title: "Your First Test"
+description: "Step-by-step guide to writing and running your first HRTK test inside a Hytale server plugin."
+---
+
+This guide walks you through creating a test class, writing test methods, using assertions, and running everything from the server console.
+
+<Note>
+This guide covers HRTK's built-in testing features. If you're testing a mod that has its own API (spawn systems, query methods, custom events), see [Testing Mod APIs](/writing-tests/testing-mod-apis) for patterns specific to mod integration testing.
+</Note>
+
+## Prerequisites
+
+Before you start, make sure:
+- Your mod project uses Gradle (or Maven) and can compile against `hrtk-api`
+- The `hrtk-server` plugin JAR is in your server's `plugins/` directory
+- Your server is running with at least one world loaded
+
+<Note>
+`hrtk-api` is a **compile-only** dependency. It provides annotations and assertion classes but is not needed at runtime - the server plugin handles everything.
+</Note>
+
+## Step 1: Add the Dependency
+
+In your mod's `build.gradle`, add `hrtk-api` as a compile-only dependency:
+
+```groovy build.gradle
+dependencies {
+    compileOnly project(':hrtk-api')
+    // ... your other dependencies
+}
+```
+
+## Step 2: Create a Test Class
+
+Create a new class in your mod's source tree. Annotate it with `@HytaleSuite` to give it a name and group your tests.
+
+```java MyFirstTests.java
+package com.example.mymod.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+
+@HytaleSuite("My First Tests")
+public class MyFirstTests {
+
+    @HytaleTest
+    void mathStillWorks() {
+        HytaleAssert.assertEquals(4, 2 + 2);
+    }
+
+    @HytaleTest("Addition with message")
+    void additionWithCustomName() {
+        HytaleAssert.assertEquals("Two plus two should equal four", 4, 2 + 2);
+    }
+}
+```
+
+<Tip>
+The `@HytaleTest` annotation accepts an optional display name string. If omitted, the method name is used as the display name in test output.
+</Tip>
+
+## Step 3: Use Assertions
+
+`HytaleAssert` provides a full set of assertion methods. Here are the most common ones:
+
+<CodeGroup>
+```java Equality
+HytaleAssert.assertEquals(expected, actual);
+HytaleAssert.assertNotEquals(unexpected, actual);
+HytaleAssert.assertEquals(3.14, 3.14159, 0.01); // with delta
+```
+
+```java Boolean & Null
+HytaleAssert.assertTrue(condition);
+HytaleAssert.assertFalse(condition);
+HytaleAssert.assertNotNull(object);
+HytaleAssert.assertNull(object);
+```
+
+```java Exceptions
+HytaleAssert.assertThrows(IllegalArgumentException.class, () -> {
+    throw new IllegalArgumentException("expected");
+});
+HytaleAssert.assertDoesNotThrow(() -> safeOperation());
+```
+
+```java Collections
+HytaleAssert.assertContains(list, element);
+HytaleAssert.assertNotContains(list, element);
+HytaleAssert.assertEmpty(collection);
+HytaleAssert.assertNotEmpty(collection);
+```
+</CodeGroup>
+
+## Step 4: Receive Context (Optional)
+
+If your test needs access to the server environment, declare a `TestContext` parameter. HRTK injects it automatically.
+
+```java
+import com.frotty27.hrtk.api.context.TestContext;
+
+@HytaleTest
+void testWithContext(TestContext ctx) {
+    ctx.log("Running inside plugin: %s", ctx.getPluginName());
+    HytaleAssert.assertNotNull(ctx.getPluginName());
+}
+```
+
+Context injection works for `TestContext`, `EcsTestContext`, `WorldTestContext`, `BenchmarkContext`, and `MockCommandSender`. The runner inspects your method's parameter types and provides the right implementation.
+
+## Step 5: Build and Run
+
+<Steps>
+  <Step title="Build your mod">
+    Run `./gradlew build` to compile your mod JAR with the test classes baked in.
+  </Step>
+  <Step title="Deploy">
+    Copy your mod's JAR into the server's `plugins/` directory alongside `hrtk-server.jar`.
+  </Step>
+  <Step title="Start the server">
+    HRTK scans all plugins on startup. You should see a log line like:
+    ```
+    HRTK: Found 2 test(s) in 1 suite(s) from plugin 'MyMod'
+    ```
+  </Step>
+  <Step title="Run tests">
+    From the server console (or in-game with `hrtk.admin` permission):
+    ```
+    /hrtk run
+    ```
+  </Step>
+</Steps>
+
+## Expected Output
+
+After running, you should see formatted results in the console:
+
+```
+=== HRTK: MyMod ===
+  My First Tests
+    [PASS] mathStillWorks (2ms)
+    [PASS] Addition with message (1ms)
+
+Results: 2 passed, 0 failed, 0 skipped (3ms total)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Test Suites" icon="layer-group" href="/writing-tests/test-suites">
+    Learn how to organize tests with @HytaleSuite, naming, and isolation strategies.
+  </Card>
+  <Card title="Lifecycle Hooks" icon="rotate" href="/writing-tests/lifecycle-hooks">
+    Set up shared state with @BeforeAll, @AfterAll, @BeforeEach, and @AfterEach.
+  </Card>
+  <Card title="Filtering & Tags" icon="tags" href="/writing-tests/filtering-and-tags">
+    Tag your tests and run subsets with --tag filters.
+  </Card>
+  <Card title="Assertion Reference" icon="check" href="/api/annotations">
+    See the full annotation reference for all 24 HRTK annotations.
+  </Card>
+</CardGroup>

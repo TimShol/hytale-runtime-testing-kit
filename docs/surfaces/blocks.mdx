@@ -1,0 +1,156 @@
+---
+title: "Blocks"
+description: "Test block types, materials, states, and placement in the world."
+---
+
+The Blocks surface provides operations for placing, reading, and asserting on blocks in the world. `BlockTestAdapter` handles block manipulation, while `BlockAssert` offers targeted checks for material, state, group, and trigger properties.
+
+Blocks are the building material of Hytale worlds. Every surface, structure, and terrain feature is made of block types. If your mod adds custom blocks, modifies block behavior, or builds structures programmatically, you need tests to verify that blocks have the correct material properties, belong to the right groups, and respond to triggers as expected.
+
+<Note>
+Block type IDs use the asset name without a namespace prefix (e.g., `Soil_Dirt` not `hytale:dirt`). The exact block names available depend on the game version and installed content packs. Use `BlockTestAdapter.blockTypeExists(id)` to check if a block type is available before testing with it.
+</Note>
+
+## Block Type Asset System
+
+Blocks in Hytale are defined as assets identified by their asset name (like `"Rock_Sandstone"` or `"Soil_Dirt"`). Each block type has properties defined in its asset file:
+
+- **Material** - The physical material type (stone, wood, dirt, etc.) which affects tool interactions, sounds, and particle effects
+- **State** - Block state variants (default, powered, open, etc.) that change behavior without changing the block type
+- **Group** - Logical groups the block belongs to (ores, transparent, vegetation, etc.) used for batch queries
+- **Trigger** - Whether the block acts as a trigger block for game logic (pressure plates, tripwires, etc.)
+
+`BlockAssert` lets you verify all of these properties in your tests.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.BlockAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.WorldAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+
+@HytaleSuite(value = "Block Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("blocks")
+public class BlockSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Place a stone block and verify its material")
+    void placeAndVerifyMaterial(WorldTestContext ctx) {
+        ctx.setBlock(5, 64, 5, "Rock_Sandstone");
+
+        Object blockType = BlockType.fromString("Rock_Sandstone");
+        BlockAssert.assertBlockMaterial(blockType, "stone");
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Verify block state is 'default' after placement")
+    void blockStateIsDefault(WorldTestContext ctx) {
+        ctx.setBlock(10, 64, 10, "Rock_Sandstone");
+
+        Object blockType = BlockType.fromString("Rock_Sandstone");
+        BlockAssert.assertBlockState(blockType, "default");
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Verify trigger block is detected correctly")
+    void triggerBlockIsDetected(WorldTestContext ctx) {
+        ctx.setBlock(15, 64, 15, "Pressure_Plate");
+
+        Object blockType = BlockType.fromString("Pressure_Plate");
+        BlockAssert.assertBlockIsTrigger(blockType);
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Verify block group membership")
+    void blockBelongsToGroup(WorldTestContext ctx) {
+        ctx.setBlock(20, 64, 20, "Iron_Ore");
+
+        Object blockType = BlockType.fromString("Iron_Ore");
+        BlockAssert.assertBlockGroup(blockType, "ores");
+    }
+
+    @WorldTest
+    @Order(5)
+    @DisplayName("Place blocks in a region and verify corners")
+    void fillRegionAndVerify(WorldTestContext ctx) {
+        // fillRegion is batched into a single world-thread dispatch.
+        // This means the entire region is consistent when you assert.
+        ctx.fillRegion(0, 60, 0, 10, 60, 10, "Grass_Full");
+
+        WorldAssert.assertBlockAt(ctx.getWorld(), 0, 60, 0, "Grass_Full");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 10, 60, 10, "Grass_Full");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 5, 60, 5, "Grass_Full");
+    }
+
+    @WorldTest
+    @Order(6)
+    @DisplayName("Replacing a block changes its type")
+    void replacingBlockChangesType(WorldTestContext ctx) {
+        ctx.setBlock(25, 64, 25, "Rock_Sandstone");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 25, 64, 25, "Rock_Sandstone");
+
+        // Overwrite the stone with dirt.
+        ctx.setBlock(25, 64, 25, "Soil_Dirt");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 25, 64, 25, "Soil_Dirt");
+        WorldAssert.assertBlockNotAt(ctx.getWorld(), 25, 64, 25, "Rock_Sandstone");
+    }
+
+    @WorldTest
+    @Order(7)
+    @DisplayName("Read block type at coordinates")
+    void readBlockType(WorldTestContext ctx) {
+        ctx.setBlock(30, 64, 30, "Rock_Sandstone");
+
+        String blockType = ctx.getBlock(30, 64, 30);
+        HytaleAssert.assertEquals("Rock_Sandstone", blockType);
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `setBlock` | `int x, int y, int z, String typeId` | `void` | Place a block at the given coordinates |
+| `getBlock` | `int x, int y, int z` | `String` | Get the block type ID at coordinates |
+| `fillRegion` | `int x1, int y1, int z1, int x2, int y2, int z2, String typeId` | `void` | Fill a cuboid region with the specified block type |
+| `getBlockMaterial` | `Object blockType` | `String` | Get the material name of a block type |
+| `getBlockState` | `Object blockType` | `String` | Get the default state key of a block type |
+| `isBlockTrigger` | `Object blockType` | `boolean` | Check if a block type is a trigger block |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertBlockMaterial` | `Object blockType, String expected` | "Expected block material [expected] but was [actual]" |
+| `assertBlockIsTrigger` | `Object blockType` | "Expected block to be a trigger but isTrigger() returned false" |
+| `assertBlockState` | `Object blockType, String expected` | "Expected block default state [expected] but was [actual]" |
+| `assertBlockGroup` | `Object blockType, String groupName` | "Expected block group [groupName] but was [actual]" |
+
+## BlockAssert vs WorldAssert
+
+Use `WorldAssert.assertBlockAt()` for simple type-ID checks (is this block stone?). Use `BlockAssert` when you need material-level, state-level, or group-level detail.
+
+<Tip>
+Pair block tests with `IsolationStrategy.DEDICATED_WORLD` so block changes do not affect the live server. The dedicated world starts as a void world, giving you a clean slate for every suite.
+</Tip>
+
+## Next Steps
+
+- [World Testing](/surfaces/world) - entity spawning and positioning
+- [Items](/surfaces/items) - test item stacks and durability
+- [Physics](/surfaces/physics) - test entity movement on blocks

@@ -1,0 +1,189 @@
+---
+title: "Contexts Reference"
+description: "Method tables for TestContext, EcsTestContext, WorldTestContext, and BenchmarkContext."
+---
+
+HRTK injects context objects into test methods based on their parameter types. Each context interface provides methods relevant to a specific testing domain. This page is the complete method reference.
+
+## TestContext
+
+The base context available to all tests. Provides logging, event capture, and command execution.
+
+```java
+public interface TestContext {
+    String getPluginName();
+    void log(String message);
+    void log(String format, Object... args);
+    <E> EventCapture<E> captureEvent(Class<E> eventType);
+    MockCommandSender createCommandSender();
+    MockCommandSender createCommandSender(String... permissions);
+    MockPlayerRef createMockPlayer();
+    void executeCommand(String commandLine, MockCommandSender sender);
+}
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `getPluginName()` | `String` | Name of the plugin whose tests are running |
+| `log(message)` | `void` | Log a message to test output |
+| `log(format, args...)` | `void` | Log a formatted message (printf-style) |
+| `captureEvent(eventType)` | `EventCapture<E>` | Start capturing events of the given type |
+| `createCommandSender()` | `MockCommandSender` | Create a mock sender with no permissions |
+| `createCommandSender(perms...)` | `MockCommandSender` | Create a mock sender with specific permissions |
+| `createMockPlayer()` | `MockPlayerRef` | Create a mock player entity for testing player-related logic |
+| `executeCommand(cmd, sender)` | `void` | Execute a command as the given sender |
+
+## EcsTestContext
+
+Extends `TestContext`. Provides direct ECS store access, entity creation, component operations, tick-waiting, and entity queries. Available when using `@EcsTest`.
+
+```java
+public interface EcsTestContext extends TestContext {
+    Object getStore();
+    Object getCommandBuffer();
+    Object createEntity();
+    void flush();
+    void putComponent(Object ref, Object type, Object component);
+    void removeComponent(Object ref, Object type);
+    Object getComponent(Object ref, Object type);
+    boolean hasComponent(Object ref, Object type);
+    void waitTicks(int ticks);
+    CompletableFuture<Void> waitTicksAsync(int ticks);
+    <T> T awaitCondition(Supplier<T> condition, int maxTicks);
+    <T> T awaitCondition(Supplier<T> condition, int maxTicks, String failMessage);
+    List<?> findEntities(Object componentType);
+    int countEntities(Object componentType);
+}
+```
+
+| Category | Method | Returns | Description |
+|---|---|---|---|
+| **Store** | `getStore()` | `Object` | The ECS store (runtime: `Store<EntityStore>`) |
+| | `getCommandBuffer()` | `Object` | Command buffer for deferred operations |
+| **Entity** | `createEntity()` | `Object` | Create an empty entity, returns reference |
+| | `flush()` | `void` | Execute deferred command buffer operations |
+| **Components** | `putComponent(ref, type, comp)` | `void` | Attach a component to an entity |
+| | `removeComponent(ref, type)` | `void` | Remove a component from an entity |
+| | `getComponent(ref, type)` | `Object` | Get component (null if absent) |
+| | `hasComponent(ref, type)` | `boolean` | Check if entity has component |
+| **Ticks** | `waitTicks(n)` | `void` | Block until N ticks elapse |
+| | `waitTicksAsync(n)` | `Future` | Non-blocking tick wait |
+| | `awaitCondition(fn, max)` | `T` | Poll until non-null or timeout |
+| | `awaitCondition(fn, max, msg)` | `T` | Poll with custom failure message |
+| **Queries** | `findEntities(type)` | `List<?>` | Find entities with component type |
+| | `countEntities(type)` | `int` | Count entities with component type |
+
+## WorldTestContext
+
+Extends `TestContext`. Provides full world access including blocks, entity spawning, positioning, and all ECS operations. Available when using `@WorldTest`, `@CombatTest`, `@SpawnTest`, or `@FlowTest`.
+
+```java
+public interface WorldTestContext extends TestContext {
+    Object getWorld();
+    Object getStore();
+    Object getCommandBuffer();
+    void flush();
+    void setBlock(int x, int y, int z, String typeId);
+    String getBlock(int x, int y, int z);
+    void fillRegion(int x1, int y1, int z1, int x2, int y2, int z2, String typeId);
+    Object spawnEntity(String typeId);
+    Object spawnEntity(String typeId, double x, double y, double z);
+    Object spawnNPC(String role, double x, double y, double z);
+    Object spawnNPC(String role, String variant, double x, double y, double z);
+    void putComponent(Object ref, Object type, Object comp);
+    void removeComponent(Object ref, Object type);
+    boolean entityExists(Object ref);
+    void despawn(Object ref);
+    void waitTicks(int ticks);
+    CompletableFuture<Void> waitTicksAsync(int ticks);
+    <T> T awaitCondition(Supplier<T> condition, int maxTicks);
+    <T> T awaitCondition(Supplier<T> condition, int maxTicks, String failMessage);
+    List<?> findEntities(Object componentType);
+    int countEntities(Object componentType);
+    Object getComponent(Object ref, Object type);
+    boolean hasComponent(Object ref, Object type);
+    double[] getPosition(Object ref);
+    void setPosition(Object ref, double x, double y, double z);
+}
+```
+
+| Category | Method | Returns | Description |
+|---|---|---|---|
+| **World** | `getWorld()` | `Object` | The Hytale World object |
+| **Store** | `getStore()` | `Object` | Entity store for the world |
+| | `getCommandBuffer()` | `Object` | Command buffer for deferred operations |
+| | `flush()` | `void` | Execute deferred operations |
+| **Blocks** | `setBlock(x,y,z, type)` | `void` | Place a block |
+| | `getBlock(x,y,z)` | `String` | Get block type ID |
+| | `fillRegion(...)` | `void` | Fill a region with blocks |
+| **Spawn** | `spawnEntity(type)` | `Object` | Spawn at origin - tries NPCPlugin first, falls back to empty entity if role not found |
+| | `spawnEntity(type, x,y,z)` | `Object` | Spawn at position - tries NPCPlugin first, falls back to empty entity if role not found |
+| | `spawnNPC(role, x,y,z)` | `Object` | Spawn a fully initialized NPC - throws if role not found |
+| | `spawnNPC(role, variant, x,y,z)` | `Object` | Spawn NPC with a specific variant - throws if role not found |
+| **Entity** | `putComponent(ref, type, comp)` | `void` | Attach component |
+| | `removeComponent(ref, type)` | `void` | Remove component |
+| | `entityExists(ref)` | `boolean` | Check if reference is valid |
+| | `despawn(ref)` | `void` | Remove entity from world |
+| **Position** | `getPosition(ref)` | `double[]` | Get `[x, y, z]` |
+| | `setPosition(ref, x,y,z)` | `void` | Set position |
+| **Ticks** | `waitTicks(n)` | `void` | Block for N ticks |
+| | `waitTicksAsync(n)` | `Future` | Non-blocking wait |
+| | `awaitCondition(fn, max)` | `T` | Poll until non-null |
+| | `awaitCondition(fn, max, msg)` | `T` | Poll with message |
+| **Queries** | `findEntities(type)` | `List<?>` | Find by component |
+| | `countEntities(type)` | `int` | Count by component |
+| | `getComponent(ref, type)` | `Object` | Get component |
+| | `hasComponent(ref, type)` | `boolean` | Check component |
+| **Thread** | `executeOnWorld(Supplier)` | `T` | Runs code on the world thread and returns the result. Use this when calling mod APIs that access the Store. |
+| | `runOnWorld(Runnable)` | `void` | Same as executeOnWorld but without a return value. |
+
+<Note>
+`executeOnWorld()` exists because mod APIs often access the ECS Store internally, which requires the world thread. When your test runs on a different thread (like @FlowTest), wrap mod API calls in `executeOnWorld()` to avoid "Assert not in thread" errors.
+</Note>
+
+## BenchmarkContext
+
+Extends `TestContext`. Provides iteration info and manual timing control. Available when using `@Benchmark`.
+
+```java
+public interface BenchmarkContext extends TestContext {
+    int getIteration();
+    int getTotalIterations();
+    boolean isWarmup();
+    void startTimer();
+    void stopTimer();
+}
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `getIteration()` | `int` | Current iteration number (0-based) |
+| `getTotalIterations()` | `int` | Total measured iterations |
+| `isWarmup()` | `boolean` | True during warmup phase |
+| `startTimer()` | `void` | Manually start timing measurement |
+| `stopTimer()` | `void` | Stop timing measurement |
+
+## Parameter Injection
+
+HRTK's `TestExecutor` resolves method parameters by type:
+
+| Parameter Type | Resolved To |
+|---|---|
+| `TestContext` | The base context |
+| `EcsTestContext` | ECS context (if available) |
+| `WorldTestContext` | World context (if available) |
+| `BenchmarkContext` | Benchmark context (if benchmarking) |
+| `MockCommandSender` | A new mock sender with no permissions |
+| `World` | The Hytale World object (if world context) |
+| `Store` | The ECS store (if world or ECS context) |
+| `CommandBuffer` | A command buffer (if world or ECS context) |
+
+<Note>
+If a requested context type is not available (e.g., requesting `WorldTestContext` in a non-world test), the parameter is injected as `null`. Design your tests to request only the context they need.
+</Note>
+
+## Next Steps
+
+- [Annotations Reference](/api/annotations) - all 26 annotations
+- [Your First Test](/writing-tests/your-first-test) - context injection in practice
+- [How It Works](/how-it-works) - parameter injection internals

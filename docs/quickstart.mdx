@@ -1,0 +1,112 @@
+---
+title: "Quickstart"
+description: "Write your first HRTK test in 5 minutes."
+---
+
+## Step 1: Add the dependency
+
+```groovy
+// build.gradle
+dependencies {
+    compileOnly files(rootProject.ext.hytaleJar)
+    compileOnly files("${rootDir}/libs/HRTK-API.jar")
+}
+```
+
+## Step 2: Write a test class
+
+Create a new file anywhere in your mod's source:
+
+```java
+package com.example.mymod.tests;
+
+import com.frotty27.hrtk.api.annotation.*;
+import com.frotty27.hrtk.api.assert_.*;
+import com.frotty27.hrtk.api.context.*;
+
+@HytaleSuite("Quickstart Tests")
+public class QuickstartTests {
+
+    @HytaleTest("Math works")
+    void testMath() {
+        HytaleAssert.assertEquals(4, 2 + 2);
+    }
+
+    @HytaleTest
+    void testStringContains() {
+        HytaleAssert.assertContainsString("world", "hello world");
+    }
+
+    @HytaleTest
+    void testExceptionThrown() {
+        HytaleAssert.assertThrows(NumberFormatException.class, () -> {
+            Integer.parseInt("not a number");
+        });
+    }
+
+    @HytaleTest
+    void testCodecRoundTrip() {
+        // Test that your component's codec serializes and deserializes correctly
+        CodecAssert.assertRoundTrip(MyComponent.CODEC, new MyComponent("test", 42));
+    }
+
+    @EcsTest
+    void testComponentInECS(EcsTestContext ctx) {
+        // Create an entity and add a component
+        var entity = ctx.createEntity();
+        ctx.putComponent(entity, MyComponent.TYPE, new MyComponent("hello", 1));
+        ctx.flush();
+
+        // Verify it's there
+        EcsAssert.assertHasComponent(ctx.getStore(), entity, MyComponent.TYPE);
+    }
+}
+```
+
+## Step 3: Build your mod
+
+```bash
+./gradlew build
+```
+
+Your test classes compile into your mod JAR alongside your regular code.
+
+## Step 4: Install and run
+
+1. Place your mod JAR in your server's mods folder
+   - Singleplayer: `%APPDATA%\Hytale\UserData\Mods\`
+   - Dedicated server: `<your-server-root>/mods/`
+2. Place `HRTK.jar` in the same mods folder
+3. Start the server
+4. Run `/hrtk run`
+
+## Expected output
+
+```
+=== HRTK: MyMod ===
+  Quickstart Tests
+    [PASS] Math works (1ms)
+    [PASS] testStringContains (0ms)
+    [PASS] testExceptionThrown (1ms)
+    [PASS] testCodecRoundTrip (2ms)
+    [PASS] testComponentInECS (3ms)
+
+Results: 5 passed, 0 failed, 0 skipped (7ms total)
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Test Suites" icon="folder" href="/writing-tests/test-suites">
+    Organize tests with `@HytaleSuite` and isolation strategies
+  </Card>
+  <Card title="Testing Surfaces" icon="layer-group" href="/surfaces/ecs">
+    Explore all 12 testable surfaces: ECS, events, combat, stats, and more
+  </Card>
+  <Card title="Flow Tests" icon="arrows-turn-to-dots" href="/flows/overview">
+    Write multi-step integration tests: spawn, damage, kill, verify loot
+  </Card>
+  <Card title="All Annotations" icon="tags" href="/api/annotations">
+    Reference for all 24 test annotations
+  </Card>
+</CardGroup>

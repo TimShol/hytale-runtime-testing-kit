@@ -1,0 +1,102 @@
+---
+title: "Installation"
+description: "How to add HRTK to your mod project and install the server plugin."
+---
+
+## For Mod Developers
+
+### 1. Add the API dependency
+
+Place `HRTK-API.jar` in your project's `libs/` directory and add it as `compileOnly`:
+
+```groovy
+dependencies {
+    compileOnly files(rootProject.ext.hytaleJar)
+    compileOnly files("${rootDir}/libs/HRTK-API.jar")
+}
+```
+
+<Note>
+`compileOnly` means the API JAR is only needed at compile time. It's not bundled into your mod JAR - annotations survive in bytecode but add zero runtime cost.
+</Note>
+
+### 2. Declare optional dependency
+
+In your `manifest.json`, add HRTK as an optional dependency:
+
+```json
+{
+  "OptionalDependencies": {
+    "Frotty27:HRTK": "*"
+  }
+}
+```
+
+This ensures your mod works perfectly on servers without HRTK. Tests are inert unless HRTK is installed.
+
+### 3. Write tests
+
+Create test classes anywhere in your source tree:
+
+```java
+package com.example.mymod.tests;
+
+import com.frotty27.hrtk.api.annotation.*;
+import com.frotty27.hrtk.api.assert_.*;
+
+@HytaleSuite("My Tests")
+public class MyTests {
+
+    @HytaleTest
+    void testSomething() {
+        HytaleAssert.assertTrue(true);
+    }
+}
+```
+
+## For Server Operators
+
+### 1. Install the plugin
+
+Download `HRTK.jar` and place it in your Hytale server's mods directory:
+
+**Singleplayer / local testing:**
+```
+%APPDATA%\Hytale\UserData\Mods\HRTK.jar
+```
+
+**Dedicated server:**
+```
+<your-server-root>/mods/HRTK.jar
+```
+
+### 2. Start the server
+
+HRTK will scan all loaded mods for test annotations on startup:
+
+```
+[INFO] HRTK: Discovered 42 test(s) in 8 suite(s) across 3 plugin(s). Use /hrtk run to execute.
+```
+
+### 3. Run tests
+
+```
+/hrtk run              - run all tests
+/hrtk run MyMod        - run one mod's tests
+/hrtk list             - list all discovered tests
+```
+
+## Verify Installation
+
+After setup, run `/hrtk list` to verify tests are discovered:
+
+```
+Plugin: MyMod
+  Suite: My Tests (1 tests)
+    - testSomething
+```
+
+If no tests appear, check that:
+1. Your mod JAR is in the server's mods folder
+2. Test classes have `@HytaleTest` annotations
+3. HRTK.jar is also in the same mods folder

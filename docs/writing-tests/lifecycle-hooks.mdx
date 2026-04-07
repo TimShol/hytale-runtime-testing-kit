@@ -1,0 +1,204 @@
+---
+title: "Lifecycle Hooks"
+description: "Use @BeforeAll, @AfterAll, @BeforeEach, and @AfterEach to set up and tear down test state."
+---
+
+HRTK supports four lifecycle annotations that let you run setup and teardown code at precise points in the test execution cycle. These work the same way as their JUnit counterparts, adapted for the Hytale runtime environment.
+
+## Hook Execution Order
+
+For a suite with two tests, the execution order is:
+
+```
+@BeforeAll           (once, before any test)
+  @BeforeEach        (before test 1)
+    Test 1
+  @AfterEach         (after test 1)
+  @BeforeEach        (before test 2)
+    Test 2
+  @AfterEach         (after test 2)
+@AfterAll            (once, after all tests)
+```
+
+## @BeforeAll
+
+Runs **once** before the first test in the suite. Must be `static` (or instance - HRTK supports both, but static is conventional).
+
+```java
+import com.frotty27.hrtk.api.annotation.BeforeAll;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+
+@HytaleSuite("Database Tests")
+public class DatabaseTests {
+
+    private static Object testData;
+
+    @BeforeAll
+    static void setupTestData() {
+        testData = loadFixtures();
+    }
+}
+```
+
+<Tip>
+Use `@BeforeAll` for expensive one-time setup like loading configuration files, initializing shared fixtures, or preparing test data structures.
+</Tip>
+
+## @AfterAll
+
+Runs **once** after the last test in the suite completes. Like `@BeforeAll`, it can be static or instance-level.
+
+```java
+import com.frotty27.hrtk.api.annotation.AfterAll;
+
+@HytaleSuite("Resource Tests")
+public class ResourceTests {
+
+    @AfterAll
+    static void cleanupResources() {
+        // Release any shared resources
+        // This runs even if tests fail
+    }
+}
+```
+
+## @BeforeEach
+
+Runs **before every test method** in the suite. Always an instance method (not static). Use it to reset state between tests so they remain independent.
+
+```java
+import com.frotty27.hrtk.api.annotation.BeforeEach;
+import java.util.ArrayList;
+import java.util.List;
+
+@HytaleSuite("List Tests")
+public class ListTests {
+
+    private List<String> items;
+
+    @BeforeEach
+    void resetList() {
+        items = new ArrayList<>();
+        items.add("default");
+    }
+
+    @HytaleTest
+    void testAddItem() {
+        items.add("new");
+        HytaleAssert.assertEquals(2, items.size());
+    }
+
+    @HytaleTest
+    void testListStartsWithDefault() {
+        // Fresh list from @BeforeEach -- not affected by testAddItem
+        HytaleAssert.assertEquals(1, items.size());
+        HytaleAssert.assertContains(items, "default");
+    }
+}
+```
+
+## @AfterEach
+
+Runs **after every test method**, regardless of whether the test passed or failed. Use it for cleanup.
+
+```java
+import com.frotty27.hrtk.api.annotation.AfterEach;
+
+@HytaleSuite("Connection Tests")
+public class ConnectionTests {
+
+    private Object connection;
+
+    @BeforeEach
+    void openConnection() {
+        connection = createTestConnection();
+    }
+
+    @AfterEach
+    void closeConnection() {
+        if (connection != null) {
+            closeTestConnection(connection);
+            connection = null;
+        }
+    }
+}
+```
+
+## Complete Example
+
+Here is a full lifecycle example that verifies the execution order using a counter:
+
+```java
+import com.frotty27.hrtk.api.annotation.*;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+
+@HytaleSuite("Lifecycle Tests")
+public class LifecycleTests {
+
+    private static int counter = 0;
+
+    @BeforeAll
+    static void beforeAll() {
+        counter = 1;  // counter is now 1
+    }
+
+    @AfterAll
+    static void afterAll() {
+        counter++;    // final increment
+    }
+
+    @BeforeEach
+    void beforeEach() {
+        counter++;    // increments before each test
+    }
+
+    @AfterEach
+    void afterEach() {
+        counter++;    // increments after each test
+    }
+
+    @HytaleTest
+    @Order(1)
+    void firstTest() {
+        // BeforeAll(1) + BeforeEach(2) = 2
+        HytaleAssert.assertEquals(2, counter);
+    }
+
+    @HytaleTest
+    @Order(2)
+    void secondTest() {
+        // Previous: 2, AfterEach(3), BeforeEach(4) = 4
+        HytaleAssert.assertEquals(4, counter);
+    }
+}
+```
+
+## Multiple Hooks
+
+You can have multiple methods with the same lifecycle annotation. All of them will run, but the order between multiple `@BeforeEach` methods (for example) is not guaranteed.
+
+```java
+@BeforeEach
+void resetCounters() {
+    hitCount = 0;
+}
+
+@BeforeEach
+void resetTimers() {
+    lastTickTime = 0;
+}
+```
+
+<Warning>
+Lifecycle hook failures are now handled explicitly:
+
+- **`@BeforeAll` failure**: If `@BeforeAll` throws an exception, all tests in the suite are marked as `ERRORED`. The tests are not executed because the shared setup they depend on did not complete.
+- **`@AfterEach` failure**: If `@AfterEach` throws an exception, it is reported as a separate `ERRORED` result in the output, in addition to the test result itself. The test's own result (pass/fail) is preserved.
+- **`@BeforeEach` and `@AfterAll`**: These hooks log warnings on failure but do not change how individual test results are reported.
+</Warning>
+
+## Next Steps
+
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - control which tests run
+- [Test Suites](/writing-tests/test-suites) - suite configuration and isolation
+- [Your First Test](/writing-tests/your-first-test) - getting started guide

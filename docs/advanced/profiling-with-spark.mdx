@@ -1,0 +1,91 @@
+---
+title: "Profiling with spark"
+description: "Use spark to find server hotspots, then write HRTK benchmarks to track and prevent regressions."
+---
+
+## What is spark?
+
+[spark](https://www.curseforge.com/hytale/mods/spark) is a profiler for Hytale servers. It samples all threads, builds flame graphs, and shows which methods consume the most CPU time across the entire server tick. Install it alongside HRTK on your dev server.
+
+## spark vs HRTK benchmarks
+
+They solve different problems and work best together.
+
+<CardGroup cols={2}>
+  <Card title="spark (top-down profiler)" icon="magnifying-glass-chart">
+    **Answers:** "What is slow on my server right now?"
+
+    You run it, play the game, and it tells you which systems and methods are eating CPU. It profiles the entire server, not just your mod.
+  </Card>
+  <Card title="HRTK @Benchmark (bottom-up micro-benchmark)" icon="stopwatch">
+    **Answers:** "How fast is this specific operation?"
+
+    You isolate one operation (encode a component, create an entity, roll a loot table) and measure its throughput with controlled warmup and iteration counts.
+  </Card>
+</CardGroup>
+
+They are complementary, not competing. Use spark to discover problems, then use `@Benchmark` to track them.
+
+## Recommended workflow
+
+<Steps>
+  <Step title="Install both tools">
+    Place `spark.jar` and `HRTK.jar` in your server's mods folder. Both run as server plugins with no conflicts.
+  </Step>
+  <Step title="Profile with spark">
+    Run spark while your mod is active. Play normally, trigger the systems you want to profile. spark will show you a flame graph of where CPU time is spent.
+  </Step>
+  <Step title="Identify hotspots">
+    Look for your mod's methods in the flame graph. If `MyCodec.encode()` shows up taking 15% of tick time, that's your target.
+  </Step>
+  <Step title="Write HRTK benchmarks">
+    Create `@Benchmark` tests for the specific operations spark flagged:
+
+    ```java
+    @Benchmark(warmup = 100, iterations = 10000)
+    void benchMyCodecEncode(BenchmarkContext ctx) {
+        MyCodec.CODEC.encode(testData, null);
+    }
+    ```
+
+    Run `/hrtk bench` to get a baseline measurement (min, max, avg).
+  </Step>
+  <Step title="Optimize and verify">
+    Optimize your code, then re-run `/hrtk bench` to confirm the improvement. Re-run spark to verify the hotspot is gone from the flame graph.
+  </Step>
+  <Step title="Track over time">
+    Keep your `@Benchmark` tests in your mod. Run them after each release to catch performance regressions before they reach production.
+  </Step>
+</Steps>
+
+## Example
+
+spark showed `MyComponent.CODEC.encode()` taking 12% of tick time during a stress test with 200 NPCs. The developer:
+
+1. Wrote a benchmark: `@Benchmark(warmup = 50, iterations = 5000)` targeting the encode call
+2. Baseline result: avg 4.2us per encode
+3. Optimized the codec (removed redundant field copies)
+4. New result: avg 1.1us per encode (3.8x faster)
+5. Re-ran spark: the method dropped to under 3% of tick time
+
+## How HRTK benchmarks work internally
+
+HRTK uses Hytale's built-in `TimeRecorder` and `ContinuousValueRecorder` for precise measurement.
+
+<AccordionGroup>
+  <Accordion title="Warmup phase">
+    The first N iterations (configured via `warmup`) run without recording. This lets JIT compilation, CPU caches, and classloading stabilize before measurement begins.
+  </Accordion>
+  <Accordion title="Measurement phase">
+    Each measured iteration is timed via `timeRecorder.start()` and `timeRecorder.end()`. The elapsed time in nanoseconds is recorded into the `ContinuousValueRecorder`.
+  </Accordion>
+  <Accordion title="Statistics reported">
+    After all iterations complete, HRTK reports: min, max, avg from the recorder. Results are logged to console, shown in the in-game dashboard, and exported to JSON.
+  </Accordion>
+  <Accordion title="Batch size">
+    The `batchSize` parameter controls how many operations count as one "iteration". For very fast operations where timing overhead matters, use `batchSize = 100` to amortize the cost of `System.nanoTime()` calls.
+  </Accordion>
+  <Accordion title="Running benchmarks separately">
+    Benchmarks are tagged separately from tests. Run them with `/hrtk bench` (not `/hrtk run`) to avoid mixing benchmark timing with test execution overhead.
+  </Accordion>
+</AccordionGroup>

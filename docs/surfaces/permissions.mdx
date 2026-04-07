@@ -1,0 +1,146 @@
+---
+title: "Permissions"
+description: "Test permission checks, mock sender permissions, and permission assertions."
+---
+
+The Permissions surface lets you create mock command senders with configurable permissions and assert on permission state. This is useful for testing command handlers and access control without real player connections.
+
+Permission testing catches a common class of security bugs: commands that should be restricted but are not, or commands that deny access when they should not. By verifying permission grants and revocations in automated tests, you ensure that your access control works correctly after every code change.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PermissionsAssert;
+import com.frotty27.hrtk.api.context.HytaleTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Permission Surface Tests", isolation = IsolationStrategy.NONE)
+@Tag("permissions")
+public class PermissionSurfaceTests {
+
+    @HytaleTest
+    @Order(1)
+    @DisplayName("Grant a permission and verify it is active")
+    void grantAndVerifyPermission(HytaleTestContext ctx) {
+        // Create a mock sender with a name but no permissions.
+        Object sender = ctx.createCommandSender("moderator");
+
+        // Grant a specific permission node.
+        ctx.grantPermission(sender, "hytale.command.kick");
+
+        // assertHasPermission fails if the sender does not have the permission.
+        PermissionsAssert.assertHasPermission(sender, "hytale.command.kick");
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Ungranted permission is absent")
+    void ungrantedPermissionIsAbsent(HytaleTestContext ctx) {
+        Object sender = ctx.createCommandSender("regular_player");
+        ctx.grantPermission(sender, "mymod.use");
+
+        // The sender has mymod.use but NOT mymod.admin.
+        PermissionsAssert.assertHasPermission(sender, "mymod.use");
+        PermissionsAssert.assertNoPermission(sender, "mymod.admin");
+    }
+
+    @HytaleTest
+    @Order(3)
+    @DisplayName("Revoke a permission and verify it is gone")
+    void revokePermission(HytaleTestContext ctx) {
+        Object sender = ctx.createCommandSender("temp_admin");
+        ctx.grantPermission(sender, "hytale.command.ban");
+
+        PermissionsAssert.assertHasPermission(sender, "hytale.command.ban");
+
+        // Revoke and verify the permission is no longer present.
+        ctx.revokePermission(sender, "hytale.command.ban");
+        PermissionsAssert.assertNoPermission(sender, "hytale.command.ban");
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Clear all permissions from a sender")
+    void clearAllPermissions(HytaleTestContext ctx) {
+        Object sender = ctx.createCommandSender("admin");
+        ctx.grantPermission(sender, "perm.one");
+        ctx.grantPermission(sender, "perm.two");
+        ctx.grantPermission(sender, "perm.three");
+
+        // clearPermissions removes everything.
+        ctx.clearPermissions(sender);
+
+        PermissionsAssert.assertNoPermission(sender, "perm.one");
+        PermissionsAssert.assertNoPermission(sender, "perm.two");
+        PermissionsAssert.assertNoPermission(sender, "perm.three");
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `createCommandSender` | `String name` | `Object` | Create a mock command sender with the given name |
+| `grantPermission` | `Object sender, String permission` | `void` | Grant a permission node to the sender |
+| `revokePermission` | `Object sender, String permission` | `void` | Remove a permission node from the sender |
+| `hasPermission` | `Object sender, String permission` | `boolean` | Check if the sender has a permission |
+| `clearPermissions` | `Object sender` | `void` | Remove all permissions from the sender |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertHasPermission` | `Object sender, String permission` | "Expected sender to have permission [permission]" |
+| `assertNoPermission` | `Object sender, String permission` | "Expected sender to lack permission [permission]" |
+
+## Hytale Permissions System API
+
+Beyond mock senders, the Hytale server exposes a full permissions system you can access directly:
+
+### PermissionsModule
+The server's permission manager. Access via `PermissionsModule.get()`.
+
+| Method | Description |
+|---|---|
+| `hasPermission(UUID, String)` | Check if a player has a permission node |
+| `hasPermission(UUID, String, boolean)` | Check with a default fallback value |
+| `addUserPermission(UUID, Set<String>)` | Grant permissions to a player |
+| `removeUserPermission(UUID, Set<String>)` | Revoke permissions from a player |
+| `addGroupPermission(String, Set<String>)` | Grant permissions to a group |
+| `removeGroupPermission(String, Set<String>)` | Revoke permissions from a group |
+| `addUserToGroup(UUID, String)` | Add a player to a permission group |
+| `removeUserFromGroup(UUID, String)` | Remove a player from a group |
+| `getGroupsForUser(UUID)` | Get all groups a player belongs to |
+| `getProviders()` | List all registered permission providers |
+
+### HytalePermissions Constants
+Built-in permission node constants: `COMMAND_BASE`, `ASSET_EDITOR`, `BUILDER_TOOLS_EDITOR`, `FLY_CAM`, and more. Use `HytalePermissions.fromCommand(String)` to derive a permission node from a command name.
+
+### PermissionProvider Interface
+Custom permission backends implement `PermissionProvider`. The default provider is `HytalePermissionsProvider` which stores permissions in a JSON file. Has `addUserPermissions()`, `removeUserPermissions()`, `getUserPermissions()`, `addGroupPermissions()`, `removeGroupPermissions()`, `getGroupPermissions()`, `addUserToGroup()`, `removeUserFromGroup()`, `getGroupsForUser()`.
+
+### Permission Events
+- `PlayerPermissionChangeEvent` fires when a player's permissions change. Has `getPlayerUuid()`.
+- `GroupPermissionChangeEvent` fires when a group's permissions change. Has `getGroupName()`.
+- `PlayerGroupEvent` fires when a player is added/removed from a group. Has `getGroupName()`.
+
+## Key Details
+
+- Mock command senders start with **no permissions** - grant what you need explicitly in each test.
+- Permission nodes are **string-based and case-sensitive**. `"MyMod.Admin"` and `"mymod.admin"` are different permissions.
+- Use `clearPermissions` between tests if you reuse a sender across multiple assertions to avoid state leaks.
+
+## Next Steps
+
+- [Commands](/surfaces/commands) - test command execution with permissioned senders
+- [Players](/surfaces/players) - mock player entities
+- [Events](/surfaces/events) - capture permission-related events

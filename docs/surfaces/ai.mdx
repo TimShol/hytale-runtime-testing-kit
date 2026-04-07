@@ -1,0 +1,119 @@
+---
+title: "AI and Pathfinding"
+description: "Inspect NPC AI state, test pathfinding availability, and verify AI behavior."
+---
+
+The AI and Pathfinding surface covers two related systems: NPC decision-making (via `StateEvaluator`) and navigation (via `AStar` pathfinding). `AIAssert` and `AITestAdapter` handle AI state checks, while `PathfindingAssert` and `PathfindingTestAdapter` verify that pathfinding classes are available on the server classpath.
+
+AI testing is valuable when your mod modifies NPC behavior - custom AI states, patrol routes, aggression triggers, or idle behaviors. These tests verify that the AI system is active on spawned NPCs and that the pathfinding infrastructure is available for navigation.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.EcsTest;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.AIAssert;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PathfindingAssert;
+import com.frotty27.hrtk.api.context.EcsTestContext;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "AI Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("ai")
+public class AISurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Spawned NPC has active AI")
+    void spawnedNPCHasActiveAI(WorldTestContext ctx) {
+        // Spawn a fully initialized NPC - it should have AI components.
+        Object entity = ctx.spawnNPC("Trork_Warrior", 10, 64, 10);
+        ctx.waitTicks(2);
+
+        Object store = ctx.getStore();
+
+        // assertAIActive checks if the entity's StateEvaluator component is active.
+        // This confirms the NPC is making decisions and processing AI logic.
+        AIAssert.assertAIActive(store, entity);
+    }
+
+    @EcsTest
+    @Order(2)
+    @DisplayName("Pathfinding classes are available on the server")
+    void pathfindingAvailable(EcsTestContext ctx) {
+        // assertPathfindingAvailable checks that the AStar pathfinding classes
+        // exist on the classpath. If they are missing, NPCs cannot navigate.
+        PathfindingAssert.assertPathfindingAvailable();
+    }
+
+    @EcsTest
+    @Order(3)
+    @DisplayName("StateEvaluator class is available on the classpath")
+    void stateEvaluatorAvailable(EcsTestContext ctx) {
+        // This is a precondition check - if the StateEvaluator class is missing,
+        // no AI assertions will work.
+        HytaleAssert.assertTrue(
+            "StateEvaluator class should be available",
+            AITestAdapter.stateEvaluatorClassAvailable()
+        );
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Trork_Warrior has active AI after spawn")
+    void trorkWarriorAIActive(WorldTestContext ctx) {
+        Object entity = ctx.spawnNPC("Trork_Warrior", 20, 64, 20);
+        ctx.waitTicks(2);
+
+        AIAssert.assertAIActive(ctx.getStore(), entity);
+    }
+}
+```
+
+## AI Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `getStateEvaluator(Object store, Object ref)` | `Object` | Get the StateEvaluator component from an entity |
+| `isAIActive(Object store, Object ref)` | `boolean` | Check if the entity's AI is currently active |
+| `stateEvaluatorClassAvailable()` | `boolean` | Check if the StateEvaluator class is on the classpath |
+
+## AI Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertAIActive(Object store, Object ref)` | "Expected entity AI to be active but it was inactive" |
+| `assertAIInactive(Object store, Object ref)` | "Expected entity AI to be inactive but it was active" |
+
+## Pathfinding Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `pathfindingAvailable()` | `boolean` | Check if the AStarBase class is on the classpath |
+| `astarEvaluatorAvailable()` | `boolean` | Check if the AStarEvaluator class is on the classpath |
+| `pathFollowerAvailable()` | `boolean` | Check if the PathFollower class is on the classpath |
+
+## Pathfinding Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertPathfindingAvailable()` | "Expected AStar pathfinding classes to be available on the classpath but none were found" |
+
+## Key Details
+
+- AI assertions require a valid ECS store and entity reference - use `@WorldTest` with `spawnNPC` to get a fully initialized NPC, or `@EcsTest` for classpath-level checks.
+- The `StateEvaluator` component must be present on the entity for AI checks to work. If missing, the assertion fails with a component-not-found message.
+- Use the adapter `stateEvaluatorClassAvailable()` as a **precondition guard** before running AI-specific tests.
+
+## Next Steps
+
+- [NPCs](/surfaces/npc) - NPC spawning and role verification
+- [Physics](/surfaces/physics) - movement and pathfinding-related testing
+- [ECS Testing](/surfaces/ecs) - component-level access

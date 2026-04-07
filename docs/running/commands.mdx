@@ -1,0 +1,215 @@
+---
+title: "Commands"
+description: "Complete reference for all /hrtk commands: run, list, bench, results, scan, watch, and export."
+---
+
+All HRTK operations use the `/hrtk` command. You can run these from the server console or in-game if you have the `hrtk.admin` permission.
+
+## Command Overview
+
+| Command | Description |
+|---|---|
+| `/hrtk` | Show available commands and which plugins have tests |
+| `/hrtk run` | Run tests and generate a report |
+| `/hrtk list` | Show all discovered tests |
+| `/hrtk bench` | Run benchmarks only |
+| `/hrtk results` | Show results from the last test run |
+| `/hrtk scan` | Re-discover tests from all loaded plugins |
+| `/hrtk watch` | Auto-rerun tests when a plugin reloads |
+| `/hrtk export` | Save last results to JSON + HTML files |
+
+## /hrtk
+
+Shows available commands and lists which plugins have tests. Works both from the console and in-game.
+
+```
+> /hrtk
+HRTK - Hytale Runtime Testing Kit
+  /hrtk run [plugin] [--tag tag] [--fail-fast] [--verbose]
+  /hrtk list [plugin]
+  /hrtk bench [plugin] [--tag tag]
+  /hrtk results
+  /hrtk scan
+  /hrtk watch [plugin]
+  /hrtk export
+
+Plugins with tests:
+  Frotty27:MyMod  12 tests in 3 suites
+```
+
+## /hrtk run
+
+Runs your tests and shows the results. You can filter by plugin, tag, or specific test. Tests run in the background so the server stays responsive.
+
+<Note>
+Only one test run can be active at a time. If you run `/hrtk run` while tests are already running, HRTK will tell you to wait for the current run to finish.
+</Note>
+
+### Syntax
+
+```
+/hrtk run [target] [--tag tags] [--fail-fast] [--verbose]
+```
+
+### Target formats
+
+The plugin name is the `Group:Name` from your mod's `manifest.json`. Run `/hrtk` to see available plugin names.
+
+| Format | Example | What it runs |
+|---|---|---|
+| (none) | `/hrtk run` | All tests from all plugins |
+| Plugin name | `/hrtk run Frotty27:MyMod` | All tests from one plugin |
+| Plugin.Suite | `/hrtk run Frotty27:MyMod.CombatTests` | One suite from a plugin |
+| Plugin.Suite#method | `/hrtk run Frotty27:MyMod.CombatTests#testDamage` | One specific test |
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--tag tag1,tag2` | Only run tests with at least one of these tags |
+| `--fail-fast` | Stop as soon as one test fails |
+| `--verbose` | Show each test result as it completes |
+
+### Examples
+
+<CodeGroup>
+```bash Run all tests
+/hrtk run
+```
+
+```bash Run one plugin's tests
+/hrtk run Frotty27:MyMod
+```
+
+```bash Run by tag
+/hrtk run --tag combat
+```
+
+```bash Run a single test
+/hrtk run Frotty27:MyMod.CombatTests#testSwordDamage
+```
+
+```bash Fail fast with verbose output
+/hrtk run Frotty27:MyMod --fail-fast --verbose
+```
+</CodeGroup>
+
+### Output
+
+```
+--- HRTK --- Starting test run...
+
+--- HRTK Test Run Complete ---
+  2 passed  |  1 failed  |  0 skipped
+  Duration: 10ms
+  Report: plugins/hrtk-server/results/run_1712345678000.html
+```
+
+## /hrtk list
+
+Shows all discovered tests, grouped by plugin and suite.
+
+```
+> /hrtk list
+Plugin: Frotty27:MyMod
+  Combat Tests (3 tests)
+  Utility Tests (2 tests)
+
+Plugin: Frotty27:AnotherMod
+  Config Tests [DISABLED] (1 tests)
+
+Total: 6 tests in 3 suites across 2 plugins
+```
+
+<Note>
+Disabled suites and methods are shown with `[DISABLED]` markers. Benchmark methods are shown with `[BENCH]`.
+</Note>
+
+## /hrtk bench
+
+Runs only `@Benchmark` methods, skipping regular tests. Like `/hrtk run`, tests run in the background.
+
+```
+/hrtk bench                          # All benchmarks
+/hrtk bench Frotty27:MyMod           # Benchmarks from one plugin
+/hrtk bench --tag serialization      # Benchmarks tagged "serialization"
+```
+
+Output includes performance statistics:
+
+```
+HRTK [BENCH] Benchmark Examples.String concatenation baseline:
+  avg=0.45us, min=0.31us, max=2.12us (100 iterations, 5 warmup)
+```
+
+## /hrtk results
+
+Shows the pass/fail details from the most recent test run.
+
+```
+> /hrtk results
+
+--- HRTK Last Run Results ---
+Combat Tests (Frotty27:MyMod)
+  [PASS] testSwordDamage (3ms)
+  [FAIL] testArrowDamage (5ms)
+         Expected health below <80.0> but was <95.0>
+
+1 passed, 1 failed, 0 skipped (8ms)
+```
+
+If no tests have been run yet:
+
+```
+No previous run results. Use /hrtk run first.
+```
+
+## /hrtk scan
+
+Re-scans all loaded plugins for test classes. Run this after hot-reloading a plugin to pick up new or changed tests.
+
+```
+> /hrtk scan
+--- HRTK Scan Complete ---
+  Frotty27:MyMod  12 tests in 3 suites
+  Total: 12 tests across 1 plugin
+```
+
+## /hrtk watch
+
+Toggles automatic test re-runs when a plugin reloads. When a watched plugin is reloaded, HRTK automatically re-scans and runs its tests. Run the same command again to stop watching.
+
+```
+/hrtk watch Frotty27:MyMod        # Start watching a plugin
+/hrtk watch Frotty27:MyMod        # Stop watching (toggle)
+/hrtk watch                       # Show currently watched plugins
+```
+
+```
+> /hrtk watch Frotty27:MyMod
+--- HRTK Watch ---
+  Now watching Frotty27:MyMod - tests will re-run on reload
+```
+
+## /hrtk export
+
+Saves the last run's results as JSON and HTML files. The HTML report is a self-contained page with color-coded results, filtering, and light/dark mode support.
+
+```
+> /hrtk export
+--- HRTK Export Complete ---
+  JSON: plugins/hrtk-server/results/run_1712345678000.json
+  HTML: plugins/hrtk-server/results/run_1712345678000.html
+```
+
+See [File Export](/running/file-export) for format details.
+
+## Permission
+
+All commands require the `hrtk.admin` permission. Grant it to operators or specific players as needed.
+
+## Next Steps
+
+- [Console Output](/running/console-output) - understand the output format
+- [File Export](/running/file-export) - JSON and HTML export format
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - filter syntax details

@@ -1,0 +1,58 @@
+---
+title: "Modder Test Catalog"
+description: "A copy-paste reference of tested Hytale API methods with complete test examples for every surface."
+---
+
+The **Modder Test Catalog** is a standalone reference document that covers every Hytale API surface with copy-paste test examples. Each entry explains a Hytale feature in plain language, why testing it saves you debugging time, and gives you a complete test you can drop into your mod.
+
+## What is it?
+
+The catalog is a single Markdown file that lives at [`docs/MODDER-TEST-CATALOG.md`](https://github.com/Frotty27/HytaleRTK/blob/main/docs/MODDER-TEST-CATALOG.md) in the HRTK repository. It covers 22 API surfaces with priority ratings:
+
+- **CRITICAL** - Test this or you will waste hours on silent bugs
+- **HIGH** - Strongly recommended, confusing failures live here
+- **MEDIUM** - Nice to have, speeds up debugging
+- **LOW** - Failures are usually obvious
+
+## Surfaces Covered
+
+1. Working With Entities (ECS, components, archetypes)
+2. Stats, Health, and Modifiers
+3. Dealing and Receiving Damage
+4. NPC Spawning and Behavior
+5. Items, Inventory, and Equipment
+6. Loot and Drops
+7. Crafting
+8. World and Blocks
+9. Events and Listeners
+10. Commands
+11. Codecs and Serialization
+12. Physics and Movement
+13. Multi-System Flows
+14. Performance Benchmarks
+15. Specific Event Types (block, player, game mode)
+16. Effects and Buffs
+17. Permissions
+18. Entity Components (DisplayName, Scale, BoundingBox)
+19. Game Modes
+20. Death and Respawn
+21. Projectiles
+22. Plugin System
+
+## How to Use It
+
+**Find the feature you are working with.** Each section starts with a priority rating and a plain-language explanation of what can go wrong. Read the "What goes wrong silently" section first - it tells you exactly the bug you are about to hit.
+
+**Copy the test into your mod.** Every test uses real HRTK annotations and assertions. The imports are included. Adjust the package name and you are ready to go.
+
+**Run with HRTK.** Install `HRTK.jar` on your dev server, build your mod, and run `/hrtk run`. The test will execute against the live server.
+
+## API Verification
+
+Every API method referenced in the catalog has been verified via `javap` against the actual Hytale server JAR. If a method appears in a test, it exists on the server. This protects you from documentation drift where methods are renamed or removed between updates.
+
+## Next Steps
+
+- [Writing Your First Test](/writing-tests/your-first-test) - get started with HRTK
+- [Testing Surfaces](/surfaces/ecs) - detailed guides for each surface
+- [Flow Testing](/flows/overview) - multi-step integration test patterns

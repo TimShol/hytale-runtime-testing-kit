@@ -1,0 +1,150 @@
+---
+title: "Isolation: DEDICATED_WORLD"
+description: "A temporary void world is created for the suite and destroyed after. Full isolation for block and spawn tests."
+---
+
+`IsolationStrategy.DEDICATED_WORLD` creates a temporary void world for your suite, runs all tests inside it, and destroys it when the suite finishes. This provides the strongest isolation - nothing from your tests can affect the live server's worlds.
+
+## When to Use
+
+- Tests that place or break blocks
+- Tests that spawn entities and need a clean environment
+- Integration tests and flow tests (spawn -> combat -> loot)
+- Any test that needs a predictable, empty world
+
+## How It Works
+
+<Steps>
+  <Step title="Before Suite">
+    HRTK calls `TestWorldManager.getOrCreateTestWorld(suiteId)` to create a void world. The world has no terrain, no entities, and no blocks - a blank canvas.
+  </Step>
+  <Step title="Test Execution">
+    Your `@WorldTest` and `@FlowTest` methods receive a `WorldTestContext` bound to the temporary world. You can spawn entities, place blocks, and modify state freely.
+  </Step>
+  <Step title="After Suite">
+    HRTK calls `TestWorldManager.cleanupTestWorld(suiteId)` to destroy the world and all its contents. No trace remains.
+  </Step>
+</Steps>
+
+## Usage
+
+```java
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Block Placement Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("integration")
+public class BlockPlacementTests {
+
+    @WorldTest
+    void placeAndVerifyBlock(WorldTestContext ctx) {
+        ctx.setBlock(0, 64, 0, "Rock_Sandstone");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 0, 64, 0, "Rock_Sandstone");
+    }
+
+    @WorldTest
+    void fillRegionAndVerify(WorldTestContext ctx) {
+        ctx.fillRegion(0, 60, 0, 10, 60, 10, "Grass_Full");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 5, 60, 5, "Grass_Full");
+    }
+
+    @WorldTest
+    void worldStartsEmpty(WorldTestContext ctx) {
+        // Dedicated world is void -- no blocks anywhere
+        String block = ctx.getBlock(0, 64, 0);
+        // Should be air or null in a void world
+    }
+}
+```
+
+## Entity Spawning in Dedicated Worlds
+
+Dedicated worlds are the safest place to spawn test entities. They will not collide with existing live-world entities, and cleanup is automatic.
+
+```java
+@HytaleSuite(value = "Combat Flow Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("combat")
+public class CombatFlowTests {
+
+    @FlowTest(timeoutTicks = 200)
+    void spawnFightAndVerifyLoot(WorldTestContext ctx) {
+        // Spawn in a clean world
+        Object attacker = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        Object target = ctx.spawnEntity("Trork_Warrior", 5, 64, 0);
+        ctx.waitTicks(1);
+
+        CombatAssert.assertAlive(ctx.getStore(), attacker);
+        CombatAssert.assertAlive(ctx.getStore(), target);
+
+        // ... fight logic ...
+    }
+}
+```
+
+## Fallback Behavior
+
+If HRTK cannot create a dedicated world (e.g., due to server configuration or resource limits), it logs a warning and falls back to running against live state:
+
+```
+HRTK: Failed to create test world - running against live state
+```
+
+<Warning>
+If the dedicated world creation fails, your tests run with `NONE` isolation semantics. Any mutations will affect the live server. Monitor the console for fallback warnings.
+</Warning>
+
+## Performance
+
+Creating and destroying a world has significant overhead compared to `NONE` or `SNAPSHOT`. This cost is paid once per suite, not per test. For suites with many tests, the per-test amortized cost is small.
+
+| Operation | Typical Cost |
+|---|---|
+| World creation | 50-200ms |
+| World destruction | 10-50ms |
+| Per-test execution | Same as `NONE` |
+
+<Tip>
+Group your world-mutating tests into a small number of suites to minimize the number of world creates/destroys. Each suite gets its own dedicated world.
+</Tip>
+
+## Complete Example
+
+```java
+@HytaleSuite(value = "Full Integration Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("integration")
+public class FullIntegrationTests {
+
+    @WorldTest
+    @Order(1)
+    void canSpawnEntity(WorldTestContext ctx) {
+        Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+        HytaleAssert.assertTrue(ctx.entityExists(entity));
+    }
+
+    @WorldTest
+    @Order(2)
+    void canPlaceBlock(WorldTestContext ctx) {
+        ctx.setBlock(0, 63, 0, "Rock_Sandstone");
+        WorldAssert.assertBlockAt(ctx.getWorld(), 0, 63, 0, "Rock_Sandstone");
+    }
+
+    @WorldTest
+    @Order(3)
+    void canPositionEntity(WorldTestContext ctx) {
+        Object entity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        ctx.waitTicks(1);
+
+        ctx.setPosition(entity, 100, 64, 100);
+        ctx.waitTicks(1);
+
+        double[] pos = ctx.getPosition(entity);
+        HytaleAssert.assertEquals(100.0, pos[0], 1.0);
+    }
+}
+```
+
+## Next Steps
+
+- [Isolation: NONE](/isolation/none) - no protection, fastest
+- [Isolation: SNAPSHOT](/isolation/snapshot) - entity-only rollback
+- [Flow Tests](/flows/overview) - multi-step tests in dedicated worlds

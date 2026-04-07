@@ -1,0 +1,58 @@
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### IntelliJ IDEA ###
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### External Dependencies ###
+libs/
+
+### Hytale Server JAR ###
+HytaleServer.jar
+/Server/
+
+### Mac OS ###
+.DS_Store
+.idea/
+
+### Internal docs (not for git) ###
+docs/*-PROMPT*.md
+docs/*-REPORT*.md
+docs/*-CATALOG*.md
+docs/HYTALE_SERVER_API_CATALOG.md
+.mcp.json
+.claude.json

@@ -1,0 +1,131 @@
+---
+title: "Test Suites"
+description: "Organize tests with @HytaleSuite, configure isolation strategies, and apply suite-level tags."
+---
+
+A test suite is a class annotated with `@HytaleSuite`. It groups related test methods under a shared name and configuration. While `@HytaleSuite` is technically optional (any class containing `@HytaleTest` methods will be discovered), using it gives you control over naming, isolation, and tagging.
+
+## Basic Suite Declaration
+
+```java
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+
+@HytaleSuite("Crafting System Tests")
+public class CraftingTests {
+
+    @HytaleTest
+    void woodPlanksRecipeExists() {
+        // ...
+    }
+
+    @HytaleTest
+    void craftingRequiresCorrectMaterials() {
+        // ...
+    }
+}
+```
+
+If you omit the `value`, the suite name defaults to the class's simple name (e.g., `CraftingTests`).
+
+## Naming Conventions
+
+Choose suite names that are descriptive and group-oriented. They appear in test output and JSON exports.
+
+| Pattern | Example |
+|---|---|
+| Feature-based | `"Crafting System Tests"` |
+| Component-based | `"HealthComponent Tests"` |
+| Layer-based | `"Command Integration Tests"` |
+
+<Tip>
+Suite names appear in the formatted console output under each plugin header. Keep them concise but meaningful - they are the first thing you read when scanning results.
+</Tip>
+
+## Isolation Strategies
+
+The `isolation` parameter on `@HytaleSuite` controls how the suite's tests interact with live server state. This is critical for tests that mutate the ECS store or world.
+
+```java
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "ECS Mutation Tests", isolation = IsolationStrategy.SNAPSHOT)
+public class EcsMutationTests {
+    // ECS state is snapshot before the suite and restored after
+}
+
+@HytaleSuite(value = "Block Placement Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+public class BlockTests {
+    // A temporary void world is created and destroyed
+}
+```
+
+<CardGroup cols={3}>
+  <Card title="NONE" href="/isolation/none">
+    Tests run against live server state. Best for read-only and pure logic tests. **Default.**
+  </Card>
+  <Card title="SNAPSHOT" href="/isolation/snapshot">
+    ECS state is captured before the suite and restored after. Best for component mutation tests.
+  </Card>
+  <Card title="DEDICATED_WORLD" href="/isolation/dedicated-world">
+    A temporary void world is created for the suite and destroyed after. Best for block and spawn tests.
+  </Card>
+</CardGroup>
+
+See the [Isolation Overview](/isolation/overview) for a detailed comparison.
+
+## Suite-Level Tags
+
+Apply `@Tag` at the class level to tag every test in the suite. These tags combine with any method-level tags.
+
+```java
+import com.frotty27.hrtk.api.annotation.Tag;
+
+@HytaleSuite("Combat Tests")
+@Tag("combat")
+public class CombatTests {
+
+    @HytaleTest
+    @Tag("damage")   // This test has tags: ["combat", "damage"]
+    void swordDamageIsCorrect() { }
+
+    @HytaleTest       // This test has tags: ["combat"]
+    void shieldBlocksAttack() { }
+}
+```
+
+You can then filter runs by tag:
+
+```
+/hrtk run --tag combat
+/hrtk run --tag damage
+```
+
+## Suite-Level @Disabled
+
+Disable an entire suite by annotating the class with `@Disabled`. All methods will be reported as `SKIPPED` with the provided reason.
+
+```java
+import com.frotty27.hrtk.api.annotation.Disabled;
+
+@HytaleSuite("Legacy Tests")
+@Disabled("Pending migration to new ECS API")
+public class LegacyTests {
+    // All tests in this class will be skipped
+}
+```
+
+## One Suite Per Class
+
+Each class is one suite. HRTK instantiates the class using its no-argument constructor before running any tests. Instance fields are shared across all tests in the suite (within a single run), but each suite gets a fresh instance.
+
+<Warning>
+HRTK requires a no-argument constructor on your test class. If your class has constructor parameters, the suite will fail to instantiate and all tests will be marked `ERRORED`.
+</Warning>
+
+## Next Steps
+
+- [Lifecycle Hooks](/writing-tests/lifecycle-hooks) - set up and tear down shared state
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - run subsets of your tests
+- [Isolation Overview](/isolation/overview) - deep dive into isolation strategies

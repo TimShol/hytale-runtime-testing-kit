@@ -1,0 +1,97 @@
+---
+title: "Isolation: NONE"
+description: "No isolation - tests run directly against live server state."
+---
+
+`IsolationStrategy.NONE` is the default strategy. Tests run against the live server's ECS store and world state with no snapshot or rollback mechanism. This is the fastest option but requires discipline about what your tests do.
+
+## When to Use
+
+- Pure logic tests (math utilities, string processing, data structures)
+- Codec round-trip tests
+- Read-only ECS queries (checking component presence without modifying)
+- Command execution tests
+- Event capture tests
+- Any test that does not change server state
+
+## Usage
+
+```java
+// Explicit (same as default)
+@HytaleSuite(value = "Config Tests", isolation = IsolationStrategy.NONE)
+public class ConfigTests {
+
+    @HytaleTest
+    void testDefaultsAreLoaded() {
+        HytaleAssert.assertNotNull(MyPlugin.getConfig());
+        HytaleAssert.assertEquals(100, MyPlugin.getConfig().getMaxPlayers());
+    }
+
+    @HytaleTest
+    void testConfigKeyExists() {
+        HytaleAssert.assertTrue(MyPlugin.getConfig().hasKey("spawn_rate"));
+    }
+}
+
+// Implicit (NONE is the default when isolation is not specified)
+@HytaleSuite("Utility Tests")
+public class UtilityTests {
+
+    @HytaleTest
+    void testClampFunction() {
+        HytaleAssert.assertEquals(5, MathUtils.clamp(10, 0, 5));
+        HytaleAssert.assertEquals(0, MathUtils.clamp(-5, 0, 10));
+        HytaleAssert.assertEquals(7, MathUtils.clamp(7, 0, 10));
+    }
+}
+```
+
+## Risks
+
+<Warning>
+If a test using `NONE` isolation modifies the ECS store (creates entities, attaches components, changes stat values), those changes persist after the test completes. This can:
+- Affect other test suites running after yours
+- Leave orphaned entities in the live world
+- Change game behavior for connected players
+</Warning>
+
+## Mitigation Strategies
+
+If you must modify state with `NONE` isolation (not recommended), clean up in `@AfterEach`:
+
+```java
+@HytaleSuite("Careful Tests")
+public class CarefulTests {
+
+    private Object createdEntity;
+
+    @AfterEach
+    void cleanup() {
+        if (createdEntity != null) {
+            // Manually remove the entity
+            despawn(createdEntity);
+            createdEntity = null;
+        }
+    }
+
+    @WorldTest
+    void testEntityCreation(WorldTestContext ctx) {
+        createdEntity = ctx.spawnEntity("Kweebec_Sapling", 0, 64, 0);
+        HytaleAssert.assertNotNull(createdEntity);
+    }
+}
+```
+
+<Tip>
+If you find yourself writing manual cleanup code, that is a strong signal to switch to `SNAPSHOT` or `DEDICATED_WORLD` isolation instead.
+</Tip>
+
+## Performance
+
+`NONE` has zero overhead beyond the test execution itself. There is no snapshot to take, no world to create, and no state to restore. This makes it ideal for large suites of pure logic tests that need to run quickly.
+
+## Next Steps
+
+- [Isolation: SNAPSHOT](/isolation/snapshot) - entity rollback
+- [Isolation: DEDICATED_WORLD](/isolation/dedicated-world) - full world isolation
+- [Isolation Overview](/isolation/overview) - strategy comparison

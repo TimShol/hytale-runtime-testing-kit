@@ -1,0 +1,177 @@
+---
+title: "Benchmarks"
+description: "Measure performance with @Benchmark, BenchmarkContext, warmup/iteration configuration, and manual timing."
+---
+
+HRTK includes a built-in benchmarking system for measuring the performance of your mod's code paths inside the live server. Benchmarks use Hytale's `TimeRecorder` for precise timing and support configurable warmup, iteration counts, and batch sizes.
+
+<Tip>
+**Looking for server-wide profiling?** Use [spark](https://www.curseforge.com/hytale/mods/spark) alongside HRTK. spark finds the hotspots, HRTK benchmarks let you track them. See [Profiling with spark](/advanced/profiling-with-spark) for the recommended workflow.
+</Tip>
+
+## @Benchmark
+
+Annotate a method with `@Benchmark` to mark it as a performance benchmark. Benchmarks are executed via `/hrtk bench` and are not included in regular `/hrtk run` invocations.
+
+### Configuration Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `warmup` | 5 | Number of warmup iterations (not measured) |
+| `iterations` | 100 | Number of measured iterations |
+| `batchSize` | 1 | Operations per iteration (for throughput calculation) |
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.Benchmark;
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.context.BenchmarkContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "Benchmark Surface Examples", isolation = IsolationStrategy.NONE)
+@Tag("benchmark")
+public class BenchmarkSurfaceExamples {
+
+    @Benchmark
+    @DisplayName("String concatenation baseline")
+    void benchStringConcat(BenchmarkContext ctx) {
+        // The entire method body is timed automatically.
+        String result = "hello" + " " + "world" + " " + ctx.getIteration();
+        if (result.isEmpty()) {
+            throw new AssertionError("Unexpected empty string");
+        }
+    }
+
+    @Benchmark(warmup = 20, iterations = 1000)
+    @DisplayName("Math operations throughput")
+    void benchMathOperations(BenchmarkContext ctx) {
+        double value = 0.0;
+        for (int i = 0; i < 100; i++) {
+            value += Math.sin(i) * Math.cos(i);
+        }
+    }
+
+    @Benchmark(warmup = 5, iterations = 100, batchSize = 10)
+    @DisplayName("StringBuilder batched operations")
+    void benchStringBuilder(BenchmarkContext ctx) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            sb.append("iteration-").append(ctx.getIteration())
+              .append('-').append(i).append(';');
+        }
+    }
+
+    @Benchmark(iterations = 1000)
+    @DisplayName("Manual timing - exclude setup from measurement")
+    void benchManualTimed(BenchmarkContext ctx) {
+        // Setup - not timed
+        Object input = prepareInput();
+
+        ctx.startTimer();
+        // Only this section is measured
+        processInput(input);
+        ctx.stopTimer();
+
+        // Teardown - not timed
+        cleanup(input);
+    }
+}
+```
+
+## BenchmarkContext
+
+Injected into benchmark methods when you declare a `BenchmarkContext` parameter.
+
+| Method | Description |
+|---|---|
+| `getIteration()` | Current iteration number (0-based) |
+| `getTotalIterations()` | Total measured iterations |
+| `isWarmup()` | True during warmup phase |
+| `startTimer()` | Manually start timing |
+| `stopTimer()` | Manually stop timing |
+
+## Automatic vs. Manual Timing
+
+By default, the entire method body is timed automatically. If you need to exclude setup or teardown code from measurement, use manual timing:
+
+<Tabs>
+  <Tab title="Automatic (default)">
+```java
+@Benchmark(iterations = 1000)
+void benchAutoTimed(BenchmarkContext ctx) {
+    // The entire body is timed
+    expensiveOperation();
+}
+```
+  </Tab>
+  <Tab title="Manual">
+```java
+@Benchmark(iterations = 1000)
+void benchManualTimed(BenchmarkContext ctx) {
+    // Setup - not timed
+    Object input = prepareInput();
+
+    ctx.startTimer();
+    // Only this section is measured
+    processInput(input);
+    ctx.stopTimer();
+
+    // Teardown - not timed
+    cleanup(input);
+}
+```
+  </Tab>
+</Tabs>
+
+<Note>
+If you call `startTimer()` but forget to call `stopTimer()`, HRTK stops the timer automatically at the end of the iteration. The timing will still be accurate for the measured portion.
+</Note>
+
+## Execution Phases
+
+<Steps>
+  <Step title="Warmup">
+    The method runs `warmup` times. These iterations are not measured. JIT compilation and caching happen during this phase.
+  </Step>
+  <Step title="Measurement">
+    The method runs `iterations` times. Each execution is timed and recorded in a `TimeRecorder`.
+  </Step>
+  <Step title="Reporting">
+    Statistics (avg, min, max, ops/sec) are calculated and logged.
+  </Step>
+</Steps>
+
+## Output Format
+
+Benchmark results appear in the console and are stored in the test results:
+
+```
+HRTK [BENCH] Benchmark Examples.Math operations throughput:
+  avg=1.23us, min=0.98us, max=4.56us (1000 iterations, 20 warmup)
+
+HRTK [BENCH] Benchmark Examples.StringBuilder batched operations:
+  avg=2.34us, min=1.89us, max=7.12us (100 iterations, 5 warmup, 10 ops/iter, 4273504 ops/sec)
+```
+
+## Running Benchmarks
+
+```
+/hrtk bench                    # Run all benchmarks across all plugins
+/hrtk bench MyMod              # Run benchmarks from a specific plugin
+/hrtk bench --tag serialization # Run benchmarks with a specific tag
+```
+
+<Warning>
+Benchmarks run inside the live server, so results are affected by concurrent server activity. For the most consistent results, run benchmarks on a quiet server with no players connected.
+</Warning>
+
+## Next Steps
+
+- [API: Contexts](/api/contexts) - full BenchmarkContext method reference
+- [Running: Commands](/running/commands) - `/hrtk bench` command details
+- [Codec Testing](/surfaces/codecs) - benchmark serialization performance

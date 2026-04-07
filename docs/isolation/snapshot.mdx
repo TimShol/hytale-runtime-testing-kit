@@ -1,0 +1,130 @@
+---
+title: "Isolation: SNAPSHOT"
+description: "Created entities are tracked during the suite and removed after. Best for component mutation tests."
+---
+
+`IsolationStrategy.SNAPSHOT` tracks entities created during your suite and removes them when the suite finishes. This is not a full state snapshot - it only records which entities were created so they can be cleaned up. Existing entities are not captured or restored.
+
+## When to Use
+
+- Tests that create entities and need them cleaned up automatically
+- Tests that attach components to newly created entities
+- Any test where you want created entities removed after the suite
+
+## How It Works
+
+<Steps>
+  <Step title="Before Suite">
+    HRTK creates a `TestEntityTracker` that begins recording entity creations in the ECS store.
+  </Step>
+  <Step title="Test Execution">
+    Your tests run normally, creating entities and mutating ECS state as needed. The tracker records every entity created during the suite.
+  </Step>
+  <Step title="After Suite">
+    HRTK calls `tracker.cleanup()` to remove all entities that were created during the suite. Modifications to pre-existing entities are NOT reverted.
+  </Step>
+</Steps>
+
+## Usage
+
+```java
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "ECS Mutation Tests", isolation = IsolationStrategy.SNAPSHOT)
+@Tag("ecs")
+public class EcsMutationTests {
+
+    @EcsTest
+    @Order(1)
+    void testCreateAndModify(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        EcsAssert.assertHasComponent(ctx.getStore(), ref,
+                                      TransformComponent.getComponentType());
+        // This entity will be removed after the suite
+    }
+
+    @EcsTest
+    @Order(2)
+    void testRemoveComponent(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        ctx.putComponent(ref, TransformComponent.getComponentType(),
+                         new TransformComponent());
+        ctx.flush();
+
+        ctx.removeComponent(ref, TransformComponent.getComponentType());
+        ctx.flush();
+
+        EcsAssert.assertNotHasComponent(ctx.getStore(), ref,
+                                         TransformComponent.getComponentType());
+        // Entity will be removed after suite
+    }
+}
+```
+
+## What Is Tracked and What Is Not
+
+| Tracked (cleaned up) | Not Tracked (persists) |
+|---|---|
+| Entities created during the suite | Modifications to pre-existing entities |
+| Components attached to tracked entities | Block state (placed/broken blocks) |
+| | Stat changes on pre-existing entities |
+| | World-level configuration |
+| | File system changes |
+| | Event listener registrations |
+
+<Warning>
+`SNAPSHOT` only removes entities created during the suite. It does NOT revert modifications to pre-existing entities, and it does NOT roll back block changes. If your test modifies existing entities or calls `ctx.setBlock()`, those changes will persist. Use `DEDICATED_WORLD` for tests that need full isolation.
+</Warning>
+
+## Performance
+
+Entity tracking has minimal overhead - it simply records references to created entities during the suite and removes them at the end. The cleanup cost scales with the number of entities created, not the total size of the ECS store. This cost is paid once per suite (not per test).
+
+<Tip>
+If your suite creates entities that need cleanup but does not need full world isolation, `SNAPSHOT` is more efficient than `DEDICATED_WORLD` because it avoids the cost of creating and destroying an entire world.
+</Tip>
+
+## Complete Example
+
+```java
+@HytaleSuite(value = "Stat Modifier Tests", isolation = IsolationStrategy.SNAPSHOT)
+@Tag("stats")
+public class StatModifierTests {
+
+    @EcsTest
+    void applyModifierAndVerify(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        // ... set up entity with stats ...
+        ctx.flush();
+
+        // Apply a modifier
+        applyModifier(ctx, ref, "test_buff", 10.0f);
+        ctx.waitTicks(1);
+
+        StatsAssert.assertHasModifier(ctx.getStore(), ref, getStatType(), "test_buff");
+        // Entity will be removed after suite
+    }
+
+    @EcsTest
+    void removeModifierAndVerify(EcsTestContext ctx) {
+        Object ref = ctx.createEntity();
+        // ... set up entity with stats and modifier ...
+        ctx.flush();
+
+        removeModifier(ctx, ref, "test_buff");
+        ctx.waitTicks(1);
+
+        StatsAssert.assertNoModifier(ctx.getStore(), ref, getStatType(), "test_buff");
+    }
+}
+```
+
+## Next Steps
+
+- [Isolation: NONE](/isolation/none) - no protection, fastest
+- [Isolation: DEDICATED_WORLD](/isolation/dedicated-world) - full world isolation
+- [Isolation Overview](/isolation/overview) - strategy comparison

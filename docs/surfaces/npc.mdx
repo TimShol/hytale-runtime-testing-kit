@@ -1,0 +1,176 @@
+---
+title: "NPCs"
+description: "Spawn and inspect NPC entities, verify roles, variants, and despawn state."
+---
+
+The NPC surface provides helpers for spawning NPC entities, querying their role and variant data, and asserting on despawn state. It builds on `WorldTestContext` and adds NPC-specific operations through `NPCTestAdapter` and `NPCAssert`.
+
+NPCs are the living inhabitants of Hytale - Kweebecs, Trork Warriors, Outlander Hunters, and any custom roles your mod defines. Testing NPCs is about verifying that the right creatures spawn with the right properties and behave as expected.
+
+<Note>
+NPC role names like `Trork_Warrior` and `Kweebec_Sapling` are examples from Hytale's default content. Your mod's NPCs will have their own role names. If a role name is not recognized, `spawnEntity` falls back to creating an empty entity with a TransformComponent. Use `spawnNPC` when you need to guarantee the NPC type is correct - it throws an error if the role is invalid.
+</Note>
+
+## spawnEntity vs spawnNPC
+
+Understanding the difference between these two methods is important:
+
+- **`ctx.spawnEntity("Kweebec_Sapling", x, y, z)`** - Attempts to spawn via NPCPlugin first. If it fails, falls back to creating an empty entity with no components. The empty entity will have no health, no AI, and no model. This silent fallback can make tests pass when they should fail.
+- **`ctx.spawnNPC("Kweebec_Sapling", x, y, z)`** - Directly calls NPCPlugin to spawn a fully initialized NPC. If the role name is not recognized, it fails explicitly rather than silently creating an empty entity. This is the preferred method for NPC tests.
+
+Always use `spawnNPC` when you need a real NPC with health, AI, and model components. Use `spawnEntity` only when you intentionally want the fallback behavior for generic entity testing.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.NPCAssert;
+import com.frotty27.hrtk.api.assert_.StatsAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+@HytaleSuite(value = "NPC Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("npc")
+public class NPCSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("Spawn a Trork_Warrior and verify its role")
+    void spawnTrorkAndVerifyRole(WorldTestContext ctx) {
+        // spawnNPC takes the PascalCase role name with underscores.
+        // The role name must match an entry in the NPC role registry.
+        Object npc = ctx.spawnNPC("Trork_Warrior", 10, 64, 10);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // assertNPCEntity verifies the entity has the NPC marker components.
+        NPCAssert.assertNPCEntity(store, npc);
+
+        // assertRoleName checks the role name stored in the NPC's role component.
+        NPCAssert.assertRoleName(store, npc, "Trork_Warrior");
+    }
+
+    @WorldTest
+    @Order(2)
+    @DisplayName("Spawn a Kweebec_Sapling with a variant")
+    void spawnKweebecWithVariant(WorldTestContext ctx) {
+        // The variant parameter allows spawning a specific visual or behavioral variant.
+        // Pass null for the default variant.
+        Object npc = ctx.spawnNPC("Kweebec_Sapling", "elder", 20, 64, 20);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+        NPCAssert.assertNPCEntity(store, npc);
+        NPCAssert.assertRoleName(store, npc, "Kweebec_Sapling");
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("Spawned NPC is alive and healthy")
+    void spawnedNPCIsAlive(WorldTestContext ctx) {
+        Object npc = ctx.spawnNPC("Trork_Warrior", 30, 64, 30);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // Combine NPC assertions with StatsAssert to verify full initialization.
+        // A properly spawned NPC should be both an NPC entity and alive.
+        NPCAssert.assertNPCEntity(store, npc);
+        StatsAssert.assertAlive(store, npc);
+        StatsAssert.assertHealthAtMax(store, npc);
+    }
+
+    @WorldTest
+    @Order(4)
+    @DisplayName("Verify NPC is not in despawning state after spawn")
+    void npcNotDespawningAfterSpawn(WorldTestContext ctx) {
+        Object npc = ctx.spawnNPC("Outlander_Hunter", 40, 64, 40);
+        ctx.waitTicks(1);
+
+        Object store = ctx.getStore();
+
+        // assertNotDespawning checks that the NPC has not entered the despawn process.
+        // NPCs may despawn when they are too far from players or when the server
+        // decides to cull them. A freshly spawned NPC should not be despawning.
+        NPCAssert.assertNotDespawning(store, npc);
+    }
+
+    @WorldTest
+    @Order(5)
+    @DisplayName("Despawned NPC no longer exists in the world")
+    void despawnedNPCIsRemoved(WorldTestContext ctx) {
+        Object npc = ctx.spawnNPC("Trork_Warrior", 50, 64, 50);
+        ctx.waitTicks(1);
+
+        HytaleAssert.assertTrue("NPC should exist after spawning", ctx.entityExists(npc));
+
+        // Explicitly despawn the NPC.
+        ctx.despawn(npc);
+        ctx.waitTicks(1);
+
+        HytaleAssert.assertFalse(
+            "NPC should not exist after despawning",
+            ctx.entityExists(npc)
+        );
+    }
+
+    @WorldTest
+    @Order(6)
+    @DisplayName("Verify that a known role exists in the registry")
+    void roleExistsInRegistry(WorldTestContext ctx) {
+        // assertRoleExists checks the NPC role registry without spawning anything.
+        // This is useful for smoke tests that verify your mod's NPC roles are registered.
+        NPCAssert.assertRoleExists("Kweebec_Sapling");
+        NPCAssert.assertRoleExists("Trork_Warrior");
+        NPCAssert.assertRoleExists("Trork_Warrior");
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `spawnNPC` | `String role, double x, double y, double z` | `Object` | Spawn a fully initialized NPC at the given position |
+| `spawnNPC` | `String role, String variant, double x, double y, double z` | `Object` | Spawn an NPC with a specific variant |
+| `getNPCRole` | `Object store, Object ref` | `String` | Get the role name of an NPC entity |
+| `getNPCVariant` | `Object store, Object ref` | `String` | Get the variant identifier of an NPC |
+| `isDespawning` | `Object store, Object ref` | `boolean` | Check if the NPC is currently despawning |
+| `getRoleRegistry` | none | `Object` | Get the NPC role registry for role lookups |
+
+## Assertion Methods
+
+| Method | Parameters | Failure Message |
+|---|---|---|
+| `assertNPCEntity` | `Object store, Object ref` | "Expected entity to be an NPC" |
+| `assertRoleName` | `Object store, Object ref, String expected` | "Expected NPC role [expected] but was [actual]" |
+| `assertRoleExists` | `String roleName` | "NPC role [roleName] not found in registry" |
+| `assertNotDespawning` | `Object store, Object ref` | "Expected NPC to not be despawning" |
+
+## NPC Role Names
+
+NPC role names in Hytale use PascalCase with underscores to separate words. Common built-in roles include:
+
+- `Kweebec_Sapling` - Friendly forest creature
+- `Trork_Warrior` - Hostile undead melee combatant
+- `Outlander_Hunter` - Ranged hostile NPC
+
+Your mod can register custom roles that follow the same naming convention.
+
+<Tip>
+Call `ctx.waitTicks(1)` after spawning before asserting. The NPC needs one tick to initialize all its components (health, AI, model, role data). Asserting immediately after `spawnNPC` may find the entity in a partially initialized state.
+</Tip>
+
+## Next Steps
+
+- [Stats & Combat](/surfaces/stats-and-combat) - verify NPC health and damage
+- [AI and Pathfinding](/surfaces/ai) - inspect NPC AI state
+- [World Testing](/surfaces/world) - entity positioning and world operations

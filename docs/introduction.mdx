@@ -1,0 +1,116 @@
+---
+title: "HRTK - Hytale Runtime Testing Kit"
+description: "The first runtime testing framework for Hytale server mods. Test your mod inside a live server with real ECS, events, commands, combat, and more."
+---
+
+<Info>
+**HRTK** stands for **Hytale Runtime Testing Kit** - a testing framework that runs inside the Hytale server, giving your tests access to real game state.
+</Info>
+
+## Why HRTK?
+
+Traditional test frameworks like JUnit run outside the game. They can't access Hytale's entity system, world state, events, or commands. You end up faking everything, and your fakes drift from reality.
+
+**HRTK is different.** Your tests run inside the live server as a plugin. They interact with real entities, real events, and real commands. When you deal damage in a test, Hytale's actual damage system runs. When you spawn an entity, it exists in a real world.
+
+<CardGroup cols={3}>
+  <Card title="26 Annotations" icon="tag">
+    JUnit-familiar annotations like `@HytaleTest`, `@BeforeEach`, `@Tag`, `@Timeout` - plus Hytale-specific ones like `@EcsTest`, `@WorldTest`, `@FlowTest`, `@Benchmark`
+  </Card>
+  <Card title="28 Assert Classes" icon="check">
+    Domain-specific assertions: `EcsAssert`, `StatsAssert`, `CombatAssert`, `InventoryAssert`, `LootAssert`, `EffectAssert`, `EventAssert`, `CommandAssert`, `PhysicsAssert`, `NPCAssert`, and more
+  </Card>
+  <Card title="38 Example Tests" icon="plug">
+    Comprehensive example mod with 38 test suites covering ECS, events, effects, combat, permissions, projectiles, game modes, and more
+  </Card>
+</CardGroup>
+
+## Who is this for?
+
+<CardGroup cols={2}>
+  <Card title="Mod Developers" icon="code">
+    Write tests alongside your mod code. Verify components persist, codecs round-trip, commands work, damage calculates correctly. Tests ship in your JAR and run when HRTK is installed.
+  </Card>
+  <Card title="Server Operators" icon="server">
+    Install HRTK on your dev server. Run `/hrtk run` to execute all mod tests. Verify mods work correctly before deploying to production.
+  </Card>
+</CardGroup>
+
+Players never see or interact with HRTK. It's server-side only.
+
+## What can you test?
+
+Everything a mod touches:
+
+| Surface | What you can verify |
+|---|---|
+| **ECS** | Components persist, archetypes match, entity queries return correctly |
+| **Stats** | Health/stamina/mana values, stat modifiers, alive/dead state |
+| **Combat** | Damage reduces health, lethal damage causes death, knockback applies |
+| **Events** | Events fire with correct data, cancellation works, priority ordering |
+| **Commands** | Commands execute, output is correct, permissions enforced |
+| **Codecs** | Serialization round-trips, malformed data rejected |
+| **Inventory** | Items added/removed, slots contain expected stacks |
+| **Loot** | Drop lists contain expected items, drops spawn after kills |
+| **Effects** | Effects apply/expire, overlap behavior, stat modifiers active, invulnerability |
+| **Permissions** | Permission checks, user/group add/remove, built-in permission constants |
+| **Projectiles** | Projectile module available, config assets, physics properties |
+| **Game Modes** | GameMode enum, GameModeType asset lookup, mode change events |
+| **Death/Respawn** | DeathComponent inspection, item loss config, damage pipeline |
+| **World** | Entities spawn at positions, chunks load, worlds create/destroy |
+| **UI** | Pages build correct commands, event bindings registered |
+| **Performance** | Benchmark with warmup/iteration control via TimeRecorder |
+
+## Quick Example
+
+```java
+@HytaleSuite("My Mod Tests")
+public class MyModTests {
+
+    @HytaleTest("Addition works")
+    void testMath() {
+        HytaleAssert.assertEquals(4, 2 + 2);
+    }
+
+    @EcsTest
+    void testComponentPersists(EcsTestContext ctx) {
+        var entity = ctx.createEntity();
+        ctx.putComponent(entity, MyComponent.TYPE, new MyComponent("hello"));
+        ctx.flush();
+        EcsAssert.assertHasComponent(ctx.getStore(), entity, MyComponent.TYPE);
+    }
+
+    @FlowTest(timeoutTicks = 200)
+    void testKillFlow(WorldTestContext ctx) {
+        var ref = ctx.spawnNPC("Trork_Warrior", 0, 65, 0);
+        ctx.flush();
+
+        var statMap = (EntityStatMap) ctx.getComponent(ref, EntityStatMap.getComponentType());
+        int healthStat = DefaultEntityStatTypes.getHealth();
+        statMap.subtractStatValue(healthStat, 9999.0f);
+        ctx.flush();
+        ctx.waitTicks(5);
+
+        StatsAssert.assertDead(ctx.getStore(), ref);
+    }
+}
+```
+
+<Steps>
+  <Step title="Add dependency">
+    Add `HRTK-API.jar` as `compileOnly` in your `build.gradle`
+  </Step>
+  <Step title="Write tests">
+    Annotate test methods with `@HytaleTest` and use assert classes
+  </Step>
+  <Step title="Install plugin">
+    Drop `HRTK.jar` in your server's mods folder
+  </Step>
+  <Step title="Run">
+    `/hrtk run` in the server console or in-game
+  </Step>
+</Steps>
+
+<Card title="Get started" icon="rocket" href="/quickstart">
+  Write your first test in 5 minutes
+</Card>

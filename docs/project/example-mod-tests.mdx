@@ -1,0 +1,1168 @@
+---
+title: "Example Mod Test Reference"
+description: "Every test in the HRTK example mod explained - what it tests, expected results, and why it matters."
+---
+
+Every test in the example mod is documented here with its expected result and explanation.
+
+**Total: 120+ tests across 22 suites** covering all HRTK testing surfaces.
+
+Suite categories:
+- **ECS and Codecs** - entity components, archetype queries, serialization round-trips
+- **Stats and Combat** - health, damage, stat modifiers, knockback, death
+- **Death and Respawn** - DeathComponent, DeathItemLoss, DamageModule groups
+- **Effects** - EffectControllerComponent, invulnerability toggle, OverlapBehavior enum, EntityEffect assets
+- **World and Environment** - entity spawning, blocks, physics, weather, chunks
+- **Items, Inventory, and Loot** - inventory slots, item stacks, loot drops, crafting recipes
+- **Players and Game Modes** - mock players, GameMode enum, GameModeType assets, ChangeGameModeEvent
+- **Events** - event capture, cancellation, block events, player events, EventPriority
+- **Entity Components** - DisplayNameComponent, EntityScaleComponent, BoundingBox, PositionDataComponent
+- **Commands and Permissions** - MockCommandSender, permission checks
+- **Infrastructure** - NPCs, AI, chat, scheduling, persistence, plugins, projectiles, UI
+- **Flows and Benchmarks** - multi-step integration tests, performance measurement
+
+---
+
+## AI Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** ai
+
+### testEntitySpawnForAI
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec entity and verifies the reference is non-null and the entity exists in the world.
+**Why it matters:** Confirms that entity spawning works in a dedicated world context, which is the foundation for all AI behavior testing.
+
+### testAIAssertApiAccessible
+**Expected:** PASSED
+**What it tests:** Spawns an entity and retrieves the store, then attempts to call AIAssert.assertAIActive to verify the AI assertion API is reachable.
+**Why it matters:** Ensures modders can use the AIAssert API to verify AI components are active on spawned entities.
+
+---
+
+## Basic Assertion Tests
+**Annotation:** @HytaleTest / @RepeatedTest / @ParameterizedTest
+**Isolation:** NONE
+**Tag:** unit
+
+### testAssertEqualsInt
+**Expected:** PASSED
+**What it tests:** Verifies that assertEquals correctly passes when two identical integers (42) are compared.
+**Why it matters:** Validates the most fundamental assertion - integer equality - which modders will use constantly.
+
+### testAssertEqualsString
+**Expected:** PASSED
+**What it tests:** Verifies that assertEquals correctly passes when two identical strings ("hello") are compared.
+**Why it matters:** String comparison is essential for validating item names, chat messages, and config values.
+
+### testAssertEqualsObject
+**Expected:** PASSED
+**What it tests:** Verifies that assertEquals works with complex objects by comparing two identical List instances.
+**Why it matters:** Modders need to compare collections and complex game objects, not just primitives.
+
+### testAssertNotEquals
+**Expected:** PASSED
+**What it tests:** Verifies that assertNotEquals passes when two different strings ("foo" vs "bar") are compared.
+**Why it matters:** Lets modders confirm that two values are intentionally different, such as unique entity IDs.
+
+### testAssertTrue
+**Expected:** PASSED
+**What it tests:** Verifies that assertTrue passes for a true boolean expression (1 + 1 == 2).
+**Why it matters:** The most common assertion for checking boolean conditions like entity existence or flag states.
+
+### testAssertFalse
+**Expected:** PASSED
+**What it tests:** Verifies that assertFalse passes for a false boolean expression (1 > 2).
+**Why it matters:** Used to confirm negative conditions, such as verifying an entity does not have a component.
+
+### testAssertNotNull
+**Expected:** PASSED
+**What it tests:** Verifies that assertNotNull passes when given a non-null string value.
+**Why it matters:** Critical for validating that API calls return actual objects rather than null references.
+
+### testAssertNull
+**Expected:** PASSED
+**What it tests:** Verifies that assertNull passes when given a null value.
+**Why it matters:** Needed when verifying that optional values are correctly absent, like unset components.
+
+### testAssertThrows
+**Expected:** PASSED
+**What it tests:** Verifies that assertThrows correctly detects when a lambda throws an IllegalArgumentException.
+**Why it matters:** Lets modders test error handling paths and ensure invalid inputs are properly rejected.
+
+### testAssertDoesNotThrow
+**Expected:** PASSED
+**What it tests:** Verifies that assertDoesNotThrow passes when a lambda completes without throwing.
+**Why it matters:** Confirms that normal code paths execute cleanly, which is useful for smoke-testing APIs.
+
+### testAssertContains
+**Expected:** PASSED
+**What it tests:** Verifies that assertContains correctly finds "beta" in a list of strings.
+**Why it matters:** Modders need to check if collections contain expected items, like verifying loot drops or entity lists.
+
+### testAssertNotContains
+**Expected:** PASSED
+**What it tests:** Verifies that assertNotContains passes when "delta" is absent from a list.
+**Why it matters:** Validates that unwanted items are correctly excluded from collections.
+
+### testAssertEmpty
+**Expected:** PASSED
+**What it tests:** Verifies that assertEmpty passes for an empty ArrayList.
+**Why it matters:** Confirms that collections start empty or have been properly cleared.
+
+### testAssertNotEmpty
+**Expected:** PASSED
+**What it tests:** Verifies that assertNotEmpty passes for a list containing one element.
+**Why it matters:** Ensures that operations that should produce results actually do.
+
+### testAssertMatches
+**Expected:** PASSED
+**What it tests:** Verifies that assertMatches passes when "123-4567" matches the regex pattern "\d{3}-\d{4}".
+**Why it matters:** Enables regex-based validation of formatted strings like IDs, resource paths, or chat patterns.
+
+### testAssertContainsString
+**Expected:** PASSED
+**What it tests:** Verifies that assertContainsString finds "world" within "hello world".
+**Why it matters:** Useful for partial string matching in log messages, chat output, and command responses.
+
+### testAssertGreaterThan
+**Expected:** PASSED
+**What it tests:** Verifies that assertGreaterThan passes when 10 is greater than 5.
+**Why it matters:** Validates numeric thresholds like health values, entity counts, or tick durations.
+
+### testAssertLessThan
+**Expected:** PASSED
+**What it tests:** Verifies that assertLessThan passes when 50 is less than 100.
+**Why it matters:** Confirms upper-bound constraints on numeric values.
+
+### testAssertEqualsDouble
+**Expected:** PASSED
+**What it tests:** Verifies that assertEquals with a tolerance (0.01) passes for 3.14 vs 3.14159.
+**Why it matters:** Floating-point comparisons require tolerance - essential for position, velocity, and physics checks.
+
+### testAssertSame
+**Expected:** PASSED
+**What it tests:** Verifies that assertSame passes when both arguments are the exact same object reference.
+**Why it matters:** Confirms reference identity, important when verifying singleton patterns or cached objects.
+
+### testAssertNotSame
+**Expected:** PASSED
+**What it tests:** Verifies that assertNotSame passes when two distinct Object instances are compared.
+**Why it matters:** Confirms that two references point to different objects, such as independently spawned entities.
+
+### testAssertArrayEquals
+**Expected:** PASSED
+**What it tests:** Verifies that assertArrayEquals passes for two Integer arrays with identical contents {1, 2, 3}.
+**Why it matters:** Needed for comparing position arrays, component data, or batch operation results.
+
+### testSkipped
+**Expected:** SKIPPED
+**What it tests:** Demonstrates the @Disabled annotation by marking a test that calls fail() as intentionally skipped.
+**Why it matters:** Shows modders how to temporarily disable tests without removing them from the codebase.
+
+### testMultipleTags
+**Expected:** PASSED
+**What it tests:** Verifies that a test can carry multiple tags ("unit" and "basic") and still execute normally.
+**Why it matters:** Demonstrates tag-based test filtering so modders can organize and run subsets of their tests.
+
+### testWithTimeout
+**Expected:** PASSED
+**What it tests:** Verifies that a fast assertion completes within a 2-second @Timeout constraint.
+**Why it matters:** Shows how to set time limits on tests to catch infinite loops or performance regressions.
+
+### testRepeated (x3)
+**Expected:** PASSED (3 executions)
+**What it tests:** Runs a simple assertion (Math.random() >= 0.0) three times via @RepeatedTest(3).
+**Why it matters:** Demonstrates repeated test execution for catching flaky behavior or non-deterministic bugs.
+
+### testParameterizedInts (x3)
+**Expected:** PASSED (3 executions with values 1, 2, 3)
+**What it tests:** Runs assertGreaterThan(0, value) for each integer in {1, 2, 3} via @ParameterizedTest.
+**Why it matters:** Shows how to run the same test logic across multiple input values without duplicating code.
+
+### testParameterizedStrings (x2)
+**Expected:** PASSED (2 executions with values "a", "b")
+**What it tests:** Verifies that each provided string is non-null and non-empty via @ParameterizedTest.
+**Why it matters:** Demonstrates parameterized string testing for validating multiple config values or item names.
+
+---
+
+## Benchmark Examples
+**Annotation:** @Benchmark
+**Isolation:** NONE
+**Tag:** (none)
+
+### benchStringConcat
+**Expected:** PASSED
+**What it tests:** Benchmarks string concatenation using the + operator with default warmup and iteration settings.
+**Why it matters:** Provides a baseline for measuring string operation performance in mod code.
+
+### benchMathOperations
+**Expected:** PASSED
+**What it tests:** Benchmarks 100 sin/cos operations per iteration with 20 warmup rounds and 1000 measured iterations.
+**Why it matters:** Demonstrates how to measure math-heavy code performance, relevant for physics or AI calculations.
+
+### benchStringBuilder
+**Expected:** PASSED
+**What it tests:** Benchmarks StringBuilder operations with batch size 10, 5 warmup rounds, and 100 measured iterations.
+**Why it matters:** Shows batched benchmarking for operations that should be measured in groups rather than individually.
+
+---
+
+## Block Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** blocks
+
+### testWorldAndStoreAvailable
+**Expected:** PASSED
+**What it tests:** Verifies that both the world object and entity store are non-null in a block test context.
+**Why it matters:** World and store access are prerequisites for any block manipulation - this validates the test environment.
+
+### testGetBlockReturnsValue
+**Expected:** PASSED
+**What it tests:** Calls getBlock at coordinates (0,64,0) and logs the returned block type.
+**Why it matters:** Confirms that the block query API works, which is essential for mods that read or modify terrain.
+
+---
+
+## Chat Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** chat
+
+### testAssertMessageContainsPasses
+**Expected:** PASSED
+**What it tests:** Verifies that ChatAssert.assertMessageContains passes when "Welcome" is found in "Welcome to Hytale!".
+**Why it matters:** Chat message validation is critical for mods that send notifications, announcements, or feedback.
+
+### testAssertMessageContainsFailsOnWrongSubstring
+**Expected:** PASSED
+**What it tests:** Verifies that ChatAssert.assertMessageContains correctly throws when "Goodbye" is not found in "Welcome to Hytale!".
+**Why it matters:** Ensures the assertion actually catches incorrect messages rather than silently passing.
+
+### testAssertMessageNotEmptyPasses
+**Expected:** PASSED
+**What it tests:** Verifies that ChatAssert.assertMessageNotEmpty passes for a non-empty string "Hello world".
+**Why it matters:** Confirms that mods can validate their chat output is not accidentally blank.
+
+### testAssertMessageNotEmptyFailsOnEmpty
+**Expected:** PASSED
+**What it tests:** Verifies that ChatAssert.assertMessageNotEmpty correctly throws for an empty string.
+**Why it matters:** Ensures the empty-check assertion reliably catches empty messages.
+
+---
+
+## Chunk Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** chunks
+
+### testStoreNotNull
+**Expected:** PASSED
+**What it tests:** Verifies that the entity store is non-null within a chunk test context.
+**Why it matters:** Entity store access is required for any chunk-level entity queries.
+
+### testWorldAccessible
+**Expected:** PASSED
+**What it tests:** Verifies that the world object is accessible within a chunk test context.
+**Why it matters:** World access is the prerequisite for chunk loading and terrain operations.
+
+### testChunkAssertApiAccessible
+**Expected:** PASSED
+**What it tests:** Retrieves the world reference and attempts to call ChunkAssert.assertChunkLoaded for chunk (0,0).
+**Why it matters:** Validates that the chunk assertion API is reachable, enabling mods to verify chunk loading behavior.
+
+---
+
+## Codec Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** codec
+
+### testCodecNotNull
+**Expected:** PASSED
+**What it tests:** Verifies that TransformComponent.CODEC is not null.
+**Why it matters:** Codecs are used for serialization - a null codec means the component cannot be saved or loaded.
+
+### testCodecClassIsAccessible
+**Expected:** PASSED
+**What it tests:** Verifies that the CODEC object has an accessible class with a non-empty name.
+**Why it matters:** Ensures the codec implementation is properly loaded and its class metadata is available for reflection.
+
+### testDecodeThrowsWithNull
+**Expected:** PASSED
+**What it tests:** Verifies that attempting to decode null input correctly throws an exception via CodecAssert.
+**Why it matters:** Ensures codecs handle null input gracefully rather than producing corrupt data.
+
+### testDecodeThrowsWithInvalidValue
+**Expected:** PASSED
+**What it tests:** Verifies that attempting to decode an invalid string ("not-a-valid-bson") correctly throws.
+**Why it matters:** Confirms that codecs reject malformed data, protecting against corrupt save files or network packets.
+
+### testTransformComponentInstantiable
+**Expected:** PASSED
+**What it tests:** Verifies that a new TransformComponent instance can be created and is non-null.
+**Why it matters:** Confirms the component class has a working default constructor, which is needed for ECS entity setup.
+
+---
+
+## Combat Tests
+**Annotation:** @CombatTest / @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** combat
+
+### spawnedEntityExists
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec entity and verifies its reference is non-null and the entity exists.
+**Why it matters:** Entity spawning is the first step in any combat scenario - this validates the baseline.
+
+### multipleCombatEntities
+**Expected:** PASSED
+**What it tests:** Spawns two entities at different positions and verifies both exist and have different references.
+**Why it matters:** Combat requires multiple entities - this confirms they can coexist without reference collisions.
+
+### entityExistsAfterSpawn
+**Expected:** PASSED
+**What it tests:** Spawns an entity at a specific position and confirms it exists via entityExists.
+**Why it matters:** Validates entity persistence after spawn, which combat logic depends on.
+
+### entityDespawnAfterCombat
+**Expected:** PASSED
+**What it tests:** Spawns an entity, verifies it exists, despawns it, and confirms it no longer exists.
+**Why it matters:** Combat cleanup requires reliable despawning - leaked entities cause memory and gameplay issues.
+
+---
+
+## Command Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** commands
+
+### testCreateCommandSender
+**Expected:** PASSED
+**What it tests:** Creates a default MockCommandSender and verifies it and its name are non-null.
+**Why it matters:** Command senders are the entry point for testing commands - this validates mock creation works.
+
+### testCreateCommandSenderWithPermissions
+**Expected:** PASSED
+**What it tests:** Creates a sender with "hrtk.admin" and "hrtk.run" permissions, then verifies each is present and ungranted ones are absent.
+**Why it matters:** Permission-gated commands are common in mods - this tests that the mock permission system works correctly.
+
+### testAssertCommandSucceeds
+**Expected:** PASSED
+**What it tests:** Executes "/hrtk list" via CommandAssert.assertCommandSucceeds with an admin sender.
+**Why it matters:** Validates that commands execute successfully, which is the core use case for command testing.
+
+### testAssertSenderReceivedMessage
+**Expected:** PASSED
+**What it tests:** Executes "/hrtk list" and verifies the sender's message list is non-empty afterward.
+**Why it matters:** Commands typically send feedback - this confirms the mock captures command output.
+
+### testSenderMessageClearing
+**Expected:** PASSED
+**What it tests:** Executes a command, clears the sender's messages, and verifies the list is empty.
+**Why it matters:** Message clearing between test steps prevents false positives from stale output.
+
+### testAddAndRemovePermission
+**Expected:** PASSED
+**What it tests:** Adds a permission to a sender, verifies it's present, removes it, and verifies it's gone.
+**Why it matters:** Dynamic permission changes are needed to test permission escalation and revocation scenarios.
+
+---
+
+## ECS Component Tests
+**Annotation:** @EcsTest
+**Isolation:** SNAPSHOT
+**Tag:** ecs
+
+### testCreateEntity
+**Expected:** PASSED
+**What it tests:** Creates an entity via EcsTestContext and verifies the returned reference is non-null.
+**Why it matters:** Entity creation is the foundation of the ECS system - every component test depends on this.
+
+### testPutComponent
+**Expected:** PASSED
+**What it tests:** Creates an entity, puts a TransformComponent on it, flushes, and verifies the component is present.
+**Why it matters:** Adding components to entities is the primary way to give them behavior and data.
+
+### testAssertHasComponent
+**Expected:** PASSED
+**What it tests:** Uses EcsAssert.assertHasComponent to verify a TransformComponent was correctly attached.
+**Why it matters:** Validates the dedicated ECS assertion API that modders use for component presence checks.
+
+### testAssertGetComponent
+**Expected:** PASSED
+**What it tests:** Uses EcsAssert.assertGetComponent to retrieve a TransformComponent and verifies it is non-null.
+**Why it matters:** Confirms that components can be retrieved after attachment, which is essential for reading entity data.
+
+### testRemoveComponent
+**Expected:** PASSED
+**What it tests:** Attaches a component, flushes, removes it, flushes again, and asserts it is gone.
+**Why it matters:** Component removal is needed for cleanup, state transitions, and entity behavior changes.
+
+### testAssertRefValid
+**Expected:** PASSED
+**What it tests:** Creates an entity and uses EcsAssert.assertRefValid to confirm the reference is valid.
+**Why it matters:** Invalid entity references cause crashes - this assertion helps catch stale or corrupt refs.
+
+### testFindEntities
+**Expected:** PASSED
+**What it tests:** Creates an entity with a TransformComponent, then calls findEntities and verifies the result is non-empty.
+**Why it matters:** Finding entities by component type is how systems query the world - this validates the query API.
+
+### testCountEntities
+**Expected:** PASSED
+**What it tests:** Creates an entity with a TransformComponent and verifies countEntities returns a value greater than 0.
+**Why it matters:** Entity counting is useful for validating spawn systems, limits, and cleanup operations.
+
+### testHasComponentFalseForMissing
+**Expected:** PASSED
+**What it tests:** Creates a bare entity and verifies hasComponent returns false for TransformComponent.
+**Why it matters:** Ensures that component checks correctly report absence, preventing false positive detections.
+
+### testGetComponentReturnsNullForMissing
+**Expected:** PASSED
+**What it tests:** Creates a bare entity and verifies getComponent returns null for a missing TransformComponent.
+**Why it matters:** Null returns for missing components must be reliable so modders can safely use null checks.
+
+---
+
+## Effect Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** effects
+
+### entitySpawnsSuccessfully
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec entity and verifies it exists, establishing the entity for effect testing.
+**Why it matters:** Effects are applied to entities - a working spawn is the prerequisite for all effect tests.
+
+### storeAvailableForEffects
+**Expected:** PASSED
+**What it tests:** Verifies the entity store is non-null in the effect test context.
+**Why it matters:** The store is needed to query and apply effects to entities.
+
+### multipleEntitiesForEffectComparison
+**Expected:** PASSED
+**What it tests:** Spawns two entities at different positions and verifies they have different references.
+**Why it matters:** Comparing effects between entities requires multiple distinct entity references.
+
+---
+
+## Event Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** events
+
+### testCaptureEventReturnsNonNull
+**Expected:** PASSED
+**What it tests:** Creates an EventCapture for a custom event class and verifies it is non-null.
+**Why it matters:** Event capture is the core mechanism for testing event-driven mod logic.
+
+### testEventNotFiredInitially
+**Expected:** PASSED
+**What it tests:** Creates an EventCapture and uses EventAssert.assertEventNotFired to verify no events have fired.
+**Why it matters:** Confirms that captures start clean, preventing false positives from pre-existing events.
+
+### testCaptureCountIsZeroInitially
+**Expected:** PASSED
+**What it tests:** Creates an EventCapture and verifies getCount() returns 0.
+**Why it matters:** A zero initial count is the expected baseline before any event-triggering actions.
+
+### testCaptureGetFirstReturnsNullWhenEmpty
+**Expected:** PASSED
+**What it tests:** Creates an empty EventCapture and verifies getFirst() returns null.
+**Why it matters:** Ensures safe null handling when no events have been captured yet.
+
+### testCaptureClearDoesNotThrow
+**Expected:** PASSED
+**What it tests:** Creates an EventCapture and verifies that calling clear() does not throw an exception.
+**Why it matters:** Clear must be safe to call at any time, including on empty captures.
+
+---
+
+## Expanded Combat Tests
+**Annotation:** @CombatTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** combat
+
+### testSpawnTwoEntitiesBothExist
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec and a Trork_Warrior, verifies both exist and have distinct references.
+**Why it matters:** Multi-entity combat scenarios require different entity types to coexist reliably.
+
+### testDespawnAfterCombat
+**Expected:** PASSED
+**What it tests:** Spawns a Trork_Warrior, verifies it exists, despawns it, and confirms removal.
+**Why it matters:** Post-combat cleanup must work for all entity types, not just the default Kweebec.
+
+### testCombatAssertAliveOnSpawnedEntity
+**Expected:** PASSED
+**What it tests:** Spawns an entity and attempts CombatAssert.assertAlive to verify the combat health assertion API.
+**Why it matters:** The alive-check assertion is essential for testing damage, healing, and death mechanics.
+
+---
+
+## Expanded ECS Tests
+**Annotation:** @EcsTest
+**Isolation:** SNAPSHOT
+**Tag:** ecs
+
+### testCreateEntityReturnsRef
+**Expected:** PASSED
+**What it tests:** Creates an entity and verifies the returned reference is non-null.
+**Why it matters:** Redundant validation of entity creation ensures the ECS context works across multiple test suites.
+
+### testEntityRefIsValid
+**Expected:** PASSED
+**What it tests:** Creates an entity and validates its reference using EcsAssert.assertRefValid.
+**Why it matters:** Reference validity is a safety check that prevents operations on stale or invalid entities.
+
+### testFindEntitiesReturnsNonNull
+**Expected:** PASSED
+**What it tests:** Creates an entity and verifies both the reference and the store are non-null.
+**Why it matters:** Store availability is the prerequisite for all entity query operations.
+
+### testStoreAccessible
+**Expected:** PASSED
+**What it tests:** Verifies the ECS store is accessible from the EcsTestContext.
+**Why it matters:** Direct store access is needed for advanced ECS operations beyond basic component CRUD.
+
+### testCommandBufferAccessible
+**Expected:** PASSED
+**What it tests:** Verifies the command buffer is accessible from the EcsTestContext.
+**Why it matters:** The command buffer is how deferred ECS operations are batched - essential for safe concurrent modifications.
+
+### testArchetypeContainsApiAccessible
+**Expected:** PASSED
+**What it tests:** Attempts to call EcsAssert.assertArchetypeContains to verify the archetype assertion API is reachable.
+**Why it matters:** Archetype queries let modders verify entity composition patterns used by Hytale's ECS.
+
+---
+
+## Expanded Effect Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** effects
+
+### testEntitySpawnForEffects
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies it exists for use in effect testing.
+**Why it matters:** Establishes the entity target needed for applying and querying effects.
+
+### testStoreAvailableForEffects
+**Expected:** PASSED
+**What it tests:** Verifies the entity store is non-null in the expanded effect context.
+**Why it matters:** Store access is required for querying effect components on entities.
+
+### testEffectAssertApiAccessible
+**Expected:** PASSED
+**What it tests:** Spawns an entity and attempts EffectAssert.assertEffectCount to verify the effect assertion API.
+**Why it matters:** The effect assertion API lets modders validate buff/debuff counts and effect stacking behavior.
+
+---
+
+## Expanded Event Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** events
+
+### testCaptureEventReturnsNonNull
+**Expected:** PASSED
+**What it tests:** Creates an EventCapture for a SampleEvent class and verifies it is non-null.
+**Why it matters:** Validates event capture creation with a different event type than the base Event Tests suite.
+
+### testEventNotFiredInitially
+**Expected:** PASSED
+**What it tests:** Verifies EventAssert.assertEventNotFired passes on a fresh capture.
+**Why it matters:** Confirms the assertion API works consistently across different test suites.
+
+### testCaptureCountZero
+**Expected:** PASSED
+**What it tests:** Verifies a fresh EventCapture reports a count of 0.
+**Why it matters:** Zero-count baseline verification ensures captures are properly initialized.
+
+### testGetFirstReturnsNullOnEmpty
+**Expected:** PASSED
+**What it tests:** Verifies getFirst() returns null on an empty capture.
+**Why it matters:** Safe null handling prevents NullPointerExceptions when checking for unfired events.
+
+### testClearDoesNotThrow
+**Expected:** PASSED
+**What it tests:** Verifies that clear() on an empty capture does not throw.
+**Why it matters:** Idempotent clear operations simplify test setup and teardown code.
+
+### testEventAssertNotFired
+**Expected:** PASSED
+**What it tests:** Uses both EventAssert.assertEventNotFired and capture.wasFired() to double-check no events fired.
+**Why it matters:** Cross-validates the assertion API against the raw capture API for consistency.
+
+---
+
+## Expanded Flow Tests
+**Annotation:** @FlowTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** flow
+
+### testSpawnWaitVerifyFlow
+**Expected:** PASSED
+**What it tests:** Spawns an entity, waits 5 ticks, and verifies the entity still exists.
+**Why it matters:** Multi-tick flows are common in gameplay - this validates entity persistence across tick boundaries.
+
+### testSpawnAndWaitMultipleCycles
+**Expected:** PASSED
+**What it tests:** Spawns an entity, waits 3 ticks, checks existence, waits 3 more ticks, and checks again.
+**Why it matters:** Demonstrates multi-step flow testing with intermediate assertions between wait cycles.
+
+### testAwaitConditionInFlow
+**Expected:** PASSED
+**What it tests:** Uses awaitCondition to wait until a counter reaches 3, then verifies the returned value is "done".
+**Why it matters:** Condition-based waiting is needed when tests depend on asynchronous game state changes.
+
+---
+
+## Expanded Inventory Tests
+**Annotation:** @InventoryTest / @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** inventory
+
+### testEntitySpawnForInventory
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies it exists for use in inventory testing.
+**Why it matters:** Inventory operations require an entity target - this establishes the test prerequisite.
+
+### testInventorySectionConstants
+**Expected:** PASSED
+**What it tests:** Verifies InventoryAssert section constants: SECTION_STORAGE=0, SECTION_ARMOR=1, SECTION_HOTBAR=2.
+**Why it matters:** Incorrect section constants would cause inventory operations to target the wrong slot ranges.
+
+---
+
+## Expanded Stats Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** stats
+
+### testStoreAvailable
+**Expected:** PASSED
+**What it tests:** Verifies the entity store is non-null for stats queries.
+**Why it matters:** Stats are stored as ECS components - store access is required to read them.
+
+### testEntitySpawnAndExists
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec and verifies it exists.
+**Why it matters:** Stats belong to entities - a working spawn is the prerequisite for all stat operations.
+
+### testMultipleEntitiesSpawned
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec and a Trork_Warrior, verifies both exist with distinct references.
+**Why it matters:** Comparing stats between entities requires multiple entities with different types.
+
+### testDespawnEntity
+**Expected:** PASSED
+**What it tests:** Spawns a Trork_Warrior, verifies existence, despawns it, and confirms removal.
+**Why it matters:** Entity lifecycle management is essential when testing stat persistence and cleanup.
+
+---
+
+## Expanded World Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** world
+
+### testWorldTicking
+**Expected:** PASSED
+**What it tests:** Retrieves the world reference and attempts WorldAssert.assertWorldTicking to verify the world is actively ticking.
+**Why it matters:** A non-ticking world means no game logic executes - this detects frozen world states.
+
+### testMultipleEntitySpawn
+**Expected:** PASSED
+**What it tests:** Spawns three different entity types (Kweebec, Trork_Warrior, Trork_Warrior) and verifies all exist.
+**Why it matters:** Confirms the world can handle multiple concurrent entity types without conflicts.
+
+### testTeleportEntity
+**Expected:** PASSED
+**What it tests:** Spawns an entity, teleports it to (50, 80, 50), and verifies the new position within 0.5 tolerance.
+**Why it matters:** Position manipulation is fundamental for mods that move entities, create teleporters, or set spawn points.
+
+### testDespawnEntity
+**Expected:** PASSED
+**What it tests:** Spawns an Outlander_Hunter, verifies existence, despawns it, and confirms removal.
+**Why it matters:** Tests despawn behavior with a less common entity type to ensure broad compatibility.
+
+### testStoreAndWorldNotNull
+**Expected:** PASSED
+**What it tests:** Verifies both the store and world references are non-null.
+**Why it matters:** A quick sanity check that the full world test context is properly initialized.
+
+---
+
+## Flow Tests
+**Annotation:** @FlowTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** flow
+
+### spawnWaitVerify
+**Expected:** PASSED
+**What it tests:** Spawns an entity, waits 5 ticks with logging at each step, and verifies the entity persists.
+**Why it matters:** Demonstrates the core flow test pattern - spawn, wait, verify - that models real gameplay sequences.
+
+### spawnMoveVerify
+**Expected:** PASSED
+**What it tests:** Spawns an entity, sets its position to (50, 64, 50), waits 3 ticks, and verifies the position within 1.0 tolerance.
+**Why it matters:** Movement verification across ticks is essential for testing pathfinding, teleportation, and physics.
+
+---
+
+## Inventory Tests
+**Annotation:** @InventoryTest / @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** inventory
+
+### itemStackEqualsDemo
+**Expected:** PASSED
+**What it tests:** Spawns an entity and logs that the InventoryAssert API is available for inventory testing.
+**Why it matters:** Validates that the inventory test annotation and context are working correctly.
+
+### entityAvailableForInventory
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies it exists for inventory operations.
+**Why it matters:** Inventory operations target entities - confirming entity existence prevents null reference errors.
+
+### sectionConstantsAreDefined
+**Expected:** PASSED
+**What it tests:** Verifies InventoryAssert section constants: STORAGE=0, ARMOR=1, HOTBAR=2 with descriptive labels.
+**Why it matters:** Section constants define which inventory slots are accessed - wrong values break item management.
+
+---
+
+## Isolation Strategy Tests
+
+### No Isolation
+
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+
+#### simpleNoIsolationTest
+**Expected:** PASSED
+**What it tests:** Runs basic assertions (assertTrue, assertEquals, assertNotNull) with no world or ECS isolation.
+**Why it matters:** Demonstrates that pure logic tests can run without any isolation overhead.
+
+### Snapshot Isolation
+
+**Annotation:** @EcsTest
+**Isolation:** SNAPSHOT
+
+#### ecsTestWithSnapshot
+**Expected:** PASSED
+**What it tests:** Creates an entity in a snapshot-isolated ECS store and verifies the reference is non-null.
+**Why it matters:** Snapshot isolation ensures ECS state is restored between tests, preventing cross-test contamination.
+
+### World Isolation
+
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+
+#### worldTestWithDedicatedWorld
+**Expected:** PASSED
+**What it tests:** Spawns an entity in a dedicated test world and verifies it exists.
+**Why it matters:** Dedicated world isolation provides a clean world per suite, ensuring tests don't affect each other.
+
+---
+
+## Item Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** items
+
+### testItemAssertNullCheckThrowsOnNullItemNotEmpty
+**Expected:** PASSED
+**What it tests:** Verifies that ItemAssert.assertItemNotEmpty throws IllegalArgumentException when given null.
+**Why it matters:** Null safety is critical - item assertions must reject null inputs before checking item properties.
+
+### testItemAssertNullCheckThrowsOnNullItemEmpty
+**Expected:** PASSED
+**What it tests:** Verifies that ItemAssert.assertItemEmpty throws IllegalArgumentException when given null.
+**Why it matters:** Ensures both empty and non-empty assertions enforce null checks consistently.
+
+### testItemAssertNullCheckThrowsOnNullItemId
+**Expected:** PASSED
+**What it tests:** Verifies that ItemAssert.assertItemId throws IllegalArgumentException when given a null item.
+**Why it matters:** ID-based item validation must handle null inputs safely rather than producing misleading results.
+
+### testChatAssertMessageContainsPasses
+**Expected:** PASSED
+**What it tests:** Verifies ChatAssert.assertMessageContains finds "Welcome" in "Welcome to Hytale".
+**Why it matters:** Cross-validates chat assertions from within the item test context for API consistency.
+
+### testChatAssertMessageNotEmptyPasses
+**Expected:** PASSED
+**What it tests:** Verifies ChatAssert.assertMessageNotEmpty passes for "Hello".
+**Why it matters:** Confirms chat assertions are accessible from any test suite, not just chat-specific ones.
+
+### testChatAssertMessageContainsSubstring
+**Expected:** PASSED
+**What it tests:** Verifies ChatAssert.assertMessageContains finds "brown fox" in a longer sentence.
+**Why it matters:** Multi-word substring matching validates that partial match detection works beyond single words.
+
+---
+
+## Lifecycle Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** (none)
+
+### testCounterAfterBeforeAll
+**Expected:** PASSED
+**What it tests:** Verifies the counter is 2 after @BeforeAll (sets to 1) and the first @BeforeEach (increments to 2).
+**Why it matters:** Confirms that @BeforeAll runs once before the suite and @BeforeEach runs before each test.
+
+### testCounterProgresses
+**Expected:** PASSED
+**What it tests:** Verifies the counter is 4, reflecting the @AfterEach from the previous test and the @BeforeEach for this one.
+**Why it matters:** Validates that lifecycle hooks execute in the correct order between tests.
+
+### testCounterContinues
+**Expected:** PASSED
+**What it tests:** Verifies the counter is 6, confirming continued lifecycle progression across three ordered tests.
+**Why it matters:** Demonstrates that @BeforeAll, @AfterAll, @BeforeEach, and @AfterEach all work as expected.
+
+---
+
+## Loot Tests
+**Annotation:** @HytaleTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** loot
+
+### noDropsOnEmptyList
+**Expected:** PASSED
+**What it tests:** Verifies LootAssert.assertNoDrops passes when given an empty immutable list.
+**Why it matters:** Validates the no-drops assertion for scenarios where enemies drop nothing.
+
+### dropCountZeroOnEmptyList
+**Expected:** PASSED
+**What it tests:** Verifies LootAssert.assertDropCount passes for count 0 on an empty list.
+**Why it matters:** Exact drop count validation is needed for testing loot table probability outcomes.
+
+### dropCountBetweenOnEmptyList
+**Expected:** PASSED
+**What it tests:** Verifies LootAssert.assertDropCountBetween passes for range 0-0 on an empty list.
+**Why it matters:** Range-based drop validation handles the randomness inherent in loot table rolls.
+
+### noDropsOnNewArrayList
+**Expected:** PASSED
+**What it tests:** Verifies LootAssert.assertNoDrops passes on a new mutable ArrayList.
+**Why it matters:** Ensures the assertion works with both immutable and mutable list implementations.
+
+---
+
+## NPC Tests
+**Annotation:** @WorldTest / @HytaleTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** npc
+
+### testSpawnEntityWithNPCRole
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec entity and verifies its reference is non-null and the entity exists.
+**Why it matters:** NPC spawning is the foundation for testing NPC roles, dialogue, and AI behavior.
+
+### testSpawnNPCWithFallback
+**Expected:** PASSED
+**What it tests:** Attempts spawnNPC for a Trork_Warrior, falling back to spawnEntity if the NPC plugin is not loaded.
+**Why it matters:** Demonstrates graceful degradation when optional NPC features are unavailable.
+
+### testAssertRoleExistsGraceful
+**Expected:** PASSED
+**What it tests:** Attempts NPCAssert.assertRoleExists for "Kweebec_Sapling", gracefully handling the case where the NPC module is unavailable.
+**Why it matters:** NPC role validation helps verify that content definitions are loaded correctly.
+
+### testNPCEntityInspectionGraceful
+**Expected:** PASSED
+**What it tests:** Spawns an entity and attempts NPCAssert.assertNPCEntity, logging if the NPC component check fails.
+**Why it matters:** Component-level NPC inspection lets modders verify entity type metadata beyond just the spawn name.
+
+### testSpawnMultipleEntities
+**Expected:** PASSED
+**What it tests:** Spawns two Kweebec entities at different positions and verifies they have distinct references.
+**Why it matters:** NPC group scenarios require multiple entities with unique identities.
+
+---
+
+## Permissions Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** permissions
+
+### testMockSenderHasGrantedPermission
+**Expected:** PASSED
+**What it tests:** Creates a sender with "hytale.admin.kick" and verifies hasPermission returns true for it.
+**Why it matters:** Permission-gated features must correctly recognize granted permissions.
+
+### testMockSenderLacksUngrantedPermission
+**Expected:** PASSED
+**What it tests:** Creates a sender with no permissions and verifies hasPermission returns false for "hytale.admin.ban".
+**Why it matters:** Permissions must default to denied - this prevents accidental privilege escalation.
+
+### testAddThenRemovePermission
+**Expected:** PASSED
+**What it tests:** Adds "hytale.mod.spawn" to a sender, verifies it's present, removes it, and verifies it's gone.
+**Why it matters:** Dynamic permission management is needed for testing rank changes and temporary permissions.
+
+### testPermissionsAssertOnMockSender
+**Expected:** PASSED
+**What it tests:** Uses PermissionsAssert.assertHasPermission to verify a sender has "hytale.admin.teleport".
+**Why it matters:** Validates the dedicated permissions assertion API as an alternative to manual hasPermission checks.
+
+---
+
+## Physics Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** physics
+
+### testEntitySpawnForPhysicsContext
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies it exists for use in physics testing.
+**Why it matters:** Physics operations require an entity with a world presence as their target.
+
+### testStoreAvailableForPhysics
+**Expected:** PASSED
+**What it tests:** Verifies the entity store is non-null in the physics test context.
+**Why it matters:** Store access is required for reading physics components like velocity and position.
+
+### testPhysicsAssertNullCheckOnStore
+**Expected:** PASSED
+**What it tests:** Verifies PhysicsAssert.assertVelocity throws IllegalArgumentException when store is null.
+**Why it matters:** Null-safe assertions prevent misleading test results from invalid input parameters.
+
+### testPhysicsAssertNullCheckOnRef
+**Expected:** PASSED
+**What it tests:** Verifies PhysicsAssert.assertVelocity throws IllegalArgumentException when the entity reference is null.
+**Why it matters:** Ensures the physics API rejects invalid entity references before attempting velocity checks.
+
+---
+
+## Player Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** players
+
+### testCreateMockPlayer
+**Expected:** PASSED
+**What it tests:** Creates a MockPlayerRef with no arguments and verifies it is non-null.
+**Why it matters:** Mock players are needed to test any player-facing feature without a live client connection.
+
+### testMockPlayerDisplayName
+**Expected:** PASSED
+**What it tests:** Creates a MockPlayerRef with name "Frotty27" and verifies getDisplayName returns that name.
+**Why it matters:** Display name accuracy matters for chat messages, scoreboards, and player identification.
+
+### testMockPlayerUuid
+**Expected:** PASSED
+**What it tests:** Creates a MockPlayerRef and verifies its UUID is non-null.
+**Why it matters:** UUIDs are the stable player identifier - a null UUID breaks persistence and lookup systems.
+
+### testTwoMockPlayersHaveDifferentUuids
+**Expected:** PASSED
+**What it tests:** Creates two mock players and verifies they receive different UUIDs.
+**Why it matters:** Unique UUIDs prevent player identity collisions in multiplayer testing scenarios.
+
+---
+
+## Plugin Integration Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** integration
+
+### hrtkPluginPresent
+**Expected:** SKIPPED
+**What it tests:** Marked with @RequiresPlugin("HRTK") - would verify a simple assertion passes when the HRTK plugin is present.
+**Why it matters:** Demonstrates conditional test execution based on plugin availability.
+
+### nonExistentPluginSkipped
+**Expected:** SKIPPED
+**What it tests:** Marked with @RequiresPlugin("NonExistentPlugin123") - intentionally skipped because the required plugin does not exist.
+**Why it matters:** Shows that @RequiresPlugin correctly skips tests when the declared dependency is missing.
+
+### hrtkDependencyAllowsExecution
+**Expected:** SKIPPED
+**What it tests:** Marked with @RequiresPlugin("HRTK") - would verify plugin name assertions when HRTK is available as a dependency.
+**Why it matters:** Demonstrates how plugin-dependent tests validate integration with other mods.
+
+---
+
+## Plugin Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** plugins
+
+### testPluginAssertLoadedHRTKExample
+**Expected:** PASSED
+**What it tests:** Attempts PluginAssert.assertPluginLoaded for "Frotty27:HRTK-Example", handling the case where the PluginManager is inaccessible.
+**Why it matters:** Verifying plugin load status is essential for integration tests that depend on specific mods.
+
+### testPluginCountGreaterThanZero
+**Expected:** PASSED
+**What it tests:** Attempts PluginAssert.assertPluginCount(1), handling the case where the PluginManager is inaccessible.
+**Why it matters:** Plugin count validation ensures the expected number of mods are loaded in the test environment.
+
+---
+
+## Stats Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** stats
+
+### testSpawnedEntityHasStore
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies both the entity reference and the world store are non-null.
+**Why it matters:** Stats are stored in ECS components - both entity and store references are needed to access them.
+
+### testEntityExistsAfterSpawn
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies it exists via entityExists.
+**Why it matters:** Entity existence is the prerequisite for reading or modifying any stats on that entity.
+
+### testMultipleEntitiesSpawn
+**Expected:** PASSED
+**What it tests:** Spawns two entities and verifies both exist with distinct references.
+**Why it matters:** Stat comparison tests require multiple entities with independent stat values.
+
+### testEntityDespawnRemovesIt
+**Expected:** PASSED
+**What it tests:** Spawns an entity, verifies existence, despawns it, and confirms it no longer exists.
+**Why it matters:** Despawning must properly clean up entity stats to prevent phantom data.
+
+### testStoreNotNullAfterMultipleOperations
+**Expected:** PASSED
+**What it tests:** Spawns two entities and verifies the store remains accessible afterward.
+**Why it matters:** Store stability after multiple operations ensures stats remain queryable in complex scenarios.
+
+---
+
+## Tick Waiting Tests
+**Annotation:** @FlowTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** tick
+
+### testWaitTicksDoesNotCrash
+**Expected:** PASSED
+**What it tests:** Calls waitTicks(2) inside assertDoesNotThrow to verify tick waiting completes without error.
+**Why it matters:** Tick waiting is the core flow mechanism - it must never crash or deadlock.
+
+### testAwaitConditionReturnsValue
+**Expected:** PASSED
+**What it tests:** Uses awaitCondition with a counter that returns "ready" after 3 checks, within a 10-tick timeout.
+**Why it matters:** Condition-based waiting is essential for tests that depend on asynchronous game state changes.
+
+### testAwaitConditionWithFailMessage
+**Expected:** PASSED
+**What it tests:** Uses awaitCondition with a custom failure message, returning Boolean.TRUE after 2 checks.
+**Why it matters:** Custom failure messages make debugging easier when conditions time out in CI environments.
+
+### testWaitTicksThenCheck
+**Expected:** PASSED
+**What it tests:** Spawns an entity, waits 2 ticks, and verifies the entity still exists.
+**Why it matters:** Validates that entities persist across tick boundaries, which is the fundamental flow test pattern.
+
+### testAwaitConditionImmediateReturn
+**Expected:** PASSED
+**What it tests:** Uses awaitCondition with a supplier that immediately returns "immediate", verifying instant resolution.
+**Why it matters:** Conditions that are already satisfied should return instantly without waiting, avoiding unnecessary delays.
+
+---
+
+## UI Tests
+**Annotation:** @HytaleTest
+**Isolation:** NONE
+**Tag:** ui
+
+### commandCountZeroOnEmptyCapture
+**Expected:** PASSED
+**What it tests:** Creates an empty UICommandCapture and verifies UIAssert.assertCommandCount passes for count 0.
+**Why it matters:** UI command counting validates that UI operations fire the expected number of commands.
+
+### emptyCaptureHasNoCommands
+**Expected:** PASSED
+**What it tests:** Creates an empty UICommandCapture and verifies getCount() returns 0.
+**Why it matters:** Ensures the capture correctly reports zero commands before any UI interactions.
+
+### uiAssertApiIsAccessible
+**Expected:** PASSED
+**What it tests:** Verifies UIAssert.assertCommandCount works and that hasCommand returns false on an empty capture.
+**Why it matters:** Confirms the full UI assertion API is functional for testing server-driven UI updates.
+
+---
+
+## Weather Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** weather
+
+### testWorldNotNull
+**Expected:** PASSED
+**What it tests:** Verifies the world reference is non-null in the weather test context.
+**Why it matters:** Weather is a world-level property - a null world means weather cannot be queried or changed.
+
+### testStoreAvailableForWeather
+**Expected:** PASSED
+**What it tests:** Verifies the entity store is non-null for weather-related queries.
+**Why it matters:** Weather effects may interact with entities through the store.
+
+### testWeatherAssertApiAccessible
+**Expected:** PASSED
+**What it tests:** Retrieves the world reference and attempts WeatherAssert.assertWeather for "Clear".
+**Why it matters:** Weather assertion validates that mods can verify and test weather state transitions.
+
+---
+
+## World Tests
+**Annotation:** @WorldTest
+**Isolation:** DEDICATED_WORLD
+**Tag:** world
+
+### testSpawnEntity
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec with no position arguments and verifies the reference is non-null.
+**Why it matters:** The simplest spawn call is the most common - it must work reliably.
+
+### testSpawnEntityWithPosition
+**Expected:** PASSED
+**What it tests:** Spawns a Kweebec at coordinates (10, 64, 10) and verifies the reference is non-null.
+**Why it matters:** Position-specific spawning is needed for placing entities at exact world locations.
+
+### testEntityExists
+**Expected:** PASSED
+**What it tests:** Spawns an entity and verifies entityExists returns true.
+**Why it matters:** Entity existence checking is the most fundamental query after spawning.
+
+### testDespawnEntity
+**Expected:** PASSED
+**What it tests:** Spawns an entity, confirms it exists, despawns it, and confirms it no longer exists.
+**Why it matters:** Clean despawning prevents entity leaks that degrade server performance.
+
+### testGetPosition
+**Expected:** PASSED
+**What it tests:** Spawns an entity at (5, 60, 15) and verifies getPosition returns a 3-element array.
+**Why it matters:** Position retrieval is essential for movement validation, distance checks, and spatial logic.
+
+### testSetPosition
+**Expected:** PASSED
+**What it tests:** Spawns an entity, teleports it to (100, 80, 100), and verifies the new position within 0.5 tolerance.
+**Why it matters:** Position setting (teleportation) is a core operation for mods that move entities programmatically.
+
+### testGetWorldNotNull
+**Expected:** PASSED
+**What it tests:** Verifies the world object returned by the context is non-null.
+**Why it matters:** World access is required for terrain, weather, and entity operations.
+
+### testGetStoreNotNull
+**Expected:** PASSED
+**What it tests:** Verifies the entity store returned by the context is non-null.
+**Why it matters:** Store access is required for all ECS queries and component operations.
+
+### testSpawnedEntityRefValid
+**Expected:** PASSED
+**What it tests:** Spawns an entity and validates its reference using EcsAssert.assertRefValid.
+**Why it matters:** Valid entity references are the prerequisite for all subsequent operations on that entity.

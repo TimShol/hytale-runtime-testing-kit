@@ -1,0 +1,102 @@
+---
+title: "Persistence"
+description: "Test world save paths and player storage availability."
+---
+
+The Persistence surface lets you verify that world save paths are configured and that the player storage system is accessible. `PersistenceTestAdapter` provides direct lookups, while `PersistenceAssert` wraps them as failing assertions with clear messages.
+
+Persistence testing matters because silent save failures are the worst kind of bug - players lose progress with no error message. These tests verify that the save infrastructure is wired up correctly before your mod tries to persist data.
+
+## Complete Example Suite
+
+```java
+package com.example.tests;
+
+import com.frotty27.hrtk.api.annotation.HytaleSuite;
+import com.frotty27.hrtk.api.annotation.HytaleTest;
+import com.frotty27.hrtk.api.annotation.WorldTest;
+import com.frotty27.hrtk.api.annotation.Tag;
+import com.frotty27.hrtk.api.annotation.DisplayName;
+import com.frotty27.hrtk.api.annotation.Order;
+import com.frotty27.hrtk.api.assert_.HytaleAssert;
+import com.frotty27.hrtk.api.assert_.PersistenceAssert;
+import com.frotty27.hrtk.api.context.WorldTestContext;
+import com.frotty27.hrtk.api.lifecycle.IsolationStrategy;
+
+import java.nio.file.Path;
+
+@HytaleSuite(value = "Persistence Surface Tests", isolation = IsolationStrategy.DEDICATED_WORLD)
+@Tag("persistence")
+public class PersistenceSurfaceTests {
+
+    @WorldTest
+    @Order(1)
+    @DisplayName("World has a configured save path")
+    void worldSavePathExists(WorldTestContext ctx) {
+        // assertWorldSavePathExists checks that the world has a non-null save path.
+        // This verifies the server's persistence layer is configured for this world.
+        PersistenceAssert.assertWorldSavePathExists(ctx.getWorld());
+    }
+
+    @HytaleTest
+    @Order(2)
+    @DisplayName("Player storage system is available")
+    void playerStorageAvailable() {
+        // assertPlayerStorageAvailable locates the Universe singleton and
+        // verifies its player storage accessor returns a non-null value.
+        PersistenceAssert.assertPlayerStorageAvailable();
+    }
+
+    @WorldTest
+    @Order(3)
+    @DisplayName("World save path is a valid filesystem path")
+    void worldSavePathIsValid(WorldTestContext ctx) {
+        Path savePath = PersistenceTestAdapter.getWorldSavePath(ctx.getWorld());
+        HytaleAssert.assertNotNull(
+            "World save path should not be null",
+            savePath
+        );
+    }
+
+    @HytaleTest
+    @Order(4)
+    @DisplayName("Player storage class is on the classpath")
+    void playerStorageClassAvailable() {
+        HytaleAssert.assertTrue(
+            "PlayerStorage class should be available",
+            PersistenceTestAdapter.playerStorageAvailable()
+        );
+    }
+}
+```
+
+## Adapter Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `getWorldSavePath(Object world)` | `Path` | Get the save path for a world (returns null if unavailable) |
+| `getPlayerStorage()` | `Object` | Get the player storage instance from the Universe |
+| `playerStorageAvailable()` | `boolean` | Check if the PlayerStorage class is on the classpath |
+
+## Assertion Methods
+
+| Method | Failure Message |
+|---|---|
+| `assertWorldSavePathExists(Object world)` | "Expected world save path to be non-null but it was null" |
+| `assertPlayerStorageAvailable()` | "Expected player storage to be available but it was not" |
+
+## When to Test Persistence
+
+Persistence tests are valuable as:
+
+- **Smoke tests** - Run on every build to verify the save infrastructure is wired up
+- **Precondition guards** - Check save path existence before running tests that persist data
+- **Build validation** - Catch server configurations where persistence is accidentally disabled
+
+Use `playerStorageAvailable()` from the adapter as a precondition guard before running tests that depend on player data persistence.
+
+## Next Steps
+
+- [Plugins](/surfaces/plugins) - verify plugin loading state
+- [World Testing](/surfaces/world) - world operations that may persist
+- [Scheduling](/surfaces/scheduling) - world liveness checks

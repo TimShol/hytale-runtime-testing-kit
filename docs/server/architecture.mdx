@@ -1,0 +1,179 @@
+---
+title: "Server Architecture"
+description: "The internal pipeline: discovery, runner, context injection, and result collection."
+---
+
+This page describes the internal architecture of the `hrtk-server` plugin. Understanding this pipeline helps you debug unexpected behavior and contribute to HRTK's development.
+
+## Pipeline Overview
+
+```
+Discovery -> Registry -> Filter -> Runner -> Executor -> Results
+```
+
+<Steps>
+  <Step title="Discovery">
+    `TestDiscoveryEngine` scans plugin JARs for annotated classes and methods.
+  </Step>
+  <Step title="Registry">
+    `PluginTestRegistry` stores discovered `TestClassInfo` objects, grouped by plugin name.
+  </Step>
+  <Step title="Filter">
+    `TestFilter` determines which suites and methods to run based on the command arguments.
+  </Step>
+  <Step title="Runner">
+    `TestRunner` orchestrates execution across plugins and suites, applying fail-fast logic.
+  </Step>
+  <Step title="Executor">
+    `SuiteExecutor` and `TestExecutor` handle suite-level lifecycle, isolation, and individual test execution.
+  </Step>
+  <Step title="Results">
+    `ResultCollector` accumulates results. `ResultFormatter` produces console output. `ResultExporter` writes JSON.
+  </Step>
+</Steps>
+
+## Discovery
+
+The `TestDiscoveryEngine` is the entry point for finding tests. It uses the Hytale `PluginManager` to iterate loaded plugins and the standard `JarFile` API to scan their classes.
+
+```
+TestDiscoveryEngine
+  ├── scanAll(excludePlugin)     // Scan all loaded plugins
+  ├── scanPlugin(javaPlugin)     // Scan a single plugin
+  └── analyzeClass(clazz)        // Analyze one class for annotations
+       ├── Find @HytaleSuite metadata
+       ├── Find lifecycle methods (@BeforeAll, etc.)
+       ├── Find test methods (@HytaleTest, @EcsTest, etc.)
+       └── Build TestClassInfo + TestMethodInfo[]
+```
+
+Each `TestMethodInfo` captures:
+- The `Method` reference
+- Display name (from `@DisplayName` or `@HytaleTest` value)
+- Tags (from `@Tag` + implicit tags from `@EcsTest`/`@WorldTest`)
+- Order (from `@Order`)
+- Disabled status (from `@Disabled`)
+- World requirements, player requirements
+- Timeout, benchmark config, repeat count, parameterization
+
+## Registry
+
+`PluginTestRegistry` is a `Map<String, List<TestClassInfo>>` keyed by plugin name. It supports:
+- `register(pluginName, testClassInfo)` - add a discovered suite
+- `getAllTestClasses()` - get the full map
+- `getTestClasses(pluginName)` - get suites for one plugin
+- `clearPlugin(pluginName)` - remove a plugin's suites (for re-scanning)
+- `clear()` - remove everything
+
+## Filter
+
+`TestFilter` is built from command-line arguments by `HRTKCommand.parseFilter()`:
+
+```
+TestFilter
+  ├── plugin: String?          // Filter by plugin name
+  ├── suite: String?           // Filter by suite name
+  ├── method: String?          // Filter by method name
+  ├── tags: List<String>       // Filter by tags (OR logic)
+  ├── benchmarkOnly: boolean   // Only run @Benchmark methods
+  ├── failFast: boolean        // Stop on first failure
+  └── verbose: boolean         // Extra output detail
+```
+
+Matching methods:
+- `matchesSuite(TestClassInfo)` - checks plugin and suite name
+- `matchesMethod(TestClassInfo, TestMethodInfo)` - checks method name, tags, benchmark-only
+
+## Runner
+
+`TestRunner` is the top-level orchestrator:
+
+```java
+public List<SuiteResult> run(TestFilter filter) {
+    collector.startRun();
+    for (plugin : allPlugins) {
+        for (suite : plugin.suites) {
+            if (!filter.matchesSuite(suite)) continue;
+            SuiteResult result = suiteExecutor.execute(suite, filter);
+            collector.addResult(result);
+            if (failFast && result.hasFailed()) break;
+        }
+    }
+    collector.finishRun();
+    return allResults;
+}
+```
+
+## Suite Executor
+
+`SuiteExecutor` handles the lifecycle of a single suite:
+
+<Steps>
+  <Step title="Check @Disabled">
+    If the class is disabled, all tests are immediately reported as SKIPPED.
+  </Step>
+  <Step title="Instantiate">
+    Create the test class via its no-arg constructor.
+  </Step>
+  <Step title="Apply Isolation">
+    Based on `IsolationStrategy`: create a dedicated world, take a snapshot, or do nothing.
+  </Step>
+  <Step title="Run @BeforeAll">
+    Execute all `@BeforeAll` methods (static or instance).
+  </Step>
+  <Step title="For each test method">
+    Run `@BeforeEach` -> execute test -> run `@AfterEach`. Handles benchmarks, parameterized tests, and repeated tests as special cases.
+  </Step>
+  <Step title="Run @AfterAll">
+    Execute all `@AfterAll` methods.
+  </Step>
+  <Step title="Restore Isolation">
+    Destroy the dedicated world, restore the snapshot, or do nothing.
+  </Step>
+</Steps>
+
+## Test Executor
+
+`TestExecutor` handles a single test method:
+
+1. **Skip check** - if `@Disabled`, return SKIPPED immediately
+2. **Plugin check** - if `@RequiresPlugin` and plugin not loaded, return SKIPPED
+3. **Create context** - build the appropriate `TestContext` subtype based on annotations
+4. **Inject parameters** - resolve method parameters by type
+5. **Execute with timeout** - run on the world thread (world-bound) or background thread (standard)
+6. **Catch errors** - wrap all outcomes as `TestResult` (PASSED, FAILED, ERRORED, TIMED_OUT)
+
+### Context Injection
+
+Parameter resolution follows this precedence:
+- Interface assignability check (handles most cases)
+- Simple name fallback (for cross-classloader scenarios)
+
+## Result Collection
+
+<CardGroup cols={3}>
+  <Card title="ResultCollector" icon="database">
+    Accumulates `SuiteResult` objects. Tracks the last run for `/hrtk results`.
+  </Card>
+  <Card title="ResultFormatter" icon="terminal">
+    Produces the human-readable console output with `[PASS]`/`[FAIL]`/`[ERR ]` prefixes.
+  </Card>
+  <Card title="ResultExporter" icon="file-export">
+    Writes JSON files to `<data directory>/results/` with all suite and test data.
+  </Card>
+</CardGroup>
+
+## Plugin Entry Point
+
+`HRTKPlugin` extends `JavaPlugin` and wires everything together on `onEnable()`:
+- Creates `TestDiscoveryEngine`
+- Creates `ResultCollector`
+- Creates `TestRunner`
+- Registers the `HRTKCommand` tree
+- Calls `discovery.scanAll(this)` to discover tests on startup
+
+## Next Steps
+
+- [How It Works](/how-it-works) - high-level architecture overview
+- [Commands](/running/commands) - the command tree that triggers this pipeline
+- [File Export](/running/file-export) - JSON export format

@@ -1,0 +1,28 @@
+String[] dateParts = ((String) property('server_version')).split('-')[0].split('\\.')
+def yy = dateParts[0].substring(2)
+ext.computeVersion = { int modBuild -> "${property('hytale_update')}.${yy}${dateParts[1]}${dateParts[2]}.${modBuild}" }
+
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain.languageVersion = JavaLanguageVersion.of((String) java_version)
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+}
+
+ext {
+    def localJar = file("${rootDir}/HytaleServer.jar")
+    def appDataJar = file("${System.getProperty('user.home')}/AppData/Roaming/Hytale/install/release/package/game/${rootProject.property('game_build')}/Server/HytaleServer.jar")
+    hytaleJar = localJar.exists() ? localJar : appDataJar
+    userModsDir = file("${System.getProperty('user.home')}/AppData/Roaming/Hytale/UserData/Mods")
+}

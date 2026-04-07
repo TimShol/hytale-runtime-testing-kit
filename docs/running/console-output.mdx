@@ -1,0 +1,140 @@
+---
+title: "Console Output"
+description: "Understand the format of HRTK test results in the server console."
+---
+
+When you run tests with `/hrtk run`, HRTK prints formatted results to the server console (and to the command sender if run in-game). This page explains the output format.
+
+## Overall Structure
+
+```
+=== HRTK: <PluginName> ===
+  <SuiteName>
+    [STATUS] <DisplayName> (<duration>ms)
+           <message if failed/skipped>
+
+Results: N passed, N failed, N skipped (Nms total)
+```
+
+## Status Codes
+
+Each test result is prefixed with a four-character status code:
+
+| Code | Meaning | Description |
+|---|---|---|
+| `PASS` | Passed | Test completed without assertion failures or exceptions |
+| `FAIL` | Failed | An `AssertionFailedException` was thrown |
+| `ERR ` | Errored | An unexpected exception was thrown (not an assertion) |
+| `SKIP` | Skipped | Test was `@Disabled` or a precondition was not met |
+| `TIME` | Timed Out | Test exceeded its timeout duration |
+
+## Example Output
+
+```
+=== HRTK: MyMod ===
+  Combat Tests
+    [PASS] testSwordDamage (3ms)
+    [PASS] testShieldBlock (2ms)
+    [FAIL] testArrowDamage (5ms)
+           Expected health below <80.0> but was <95.0>
+    [SKIP] testMagicDamage (0ms)
+           (Pending implementation of magic system)
+    [TIME] testSlowAnimation (30001ms)
+           Timed out after 30000ms
+  Utility Tests
+    [PASS] testClamp (1ms)
+    [PASS] testLerp (0ms)
+    [ERR ] testBrokenMethod (2ms)
+           NullPointerException: Cannot invoke method on null
+
+Results: 4 passed, 1 failed, 1 skipped (30014ms total)
+```
+
+## Plugin Headers
+
+Tests are grouped by plugin. Each plugin gets a header line:
+
+```
+=== HRTK: PluginName ===
+```
+
+## Suite Headers
+
+Within each plugin, tests are grouped by suite:
+
+```
+  Suite Name
+    [PASS] test1 (1ms)
+    [PASS] test2 (2ms)
+```
+
+## Failure Messages
+
+When a test fails, the assertion message is shown indented below the test name:
+
+```
+    [FAIL] testDamageCalculation (3ms)
+           Expected <50.0> but was <42.0>
+```
+
+For errors (unexpected exceptions), the exception class and message are shown:
+
+```
+    [ERR ] testBrokenLogic (1ms)
+           IllegalStateException: Entity store is closed
+```
+
+## Skip Reasons
+
+Skipped tests show their reason in parentheses:
+
+```
+    [SKIP] testLegacyFeature (0ms)
+           (Blocked by issue #42)
+```
+
+## Summary Line
+
+The final line summarizes the entire run:
+
+```
+Results: 12 passed, 2 failed, 1 skipped (245ms total)
+```
+
+This line is also logged to the server logger at INFO level:
+
+```
+HRTK: Run complete - 12 passed, 2 failed, 1 skipped (245ms)
+```
+
+## Benchmark Output
+
+Benchmark results have a special format with performance statistics:
+
+```
+HRTK [BENCH] BenchmarkSuite.benchOperation:
+  avg=1.23us, min=0.98us, max=4.56us (1000 iterations, 20 warmup)
+```
+
+For batched benchmarks:
+
+```
+HRTK [BENCH] BenchmarkSuite.benchBatched:
+  avg=2.34us, min=1.89us, max=7.12us (100 iterations, 5 warmup, 10 ops/iter, 4273504 ops/sec)
+```
+
+## Reading Results Efficiently
+
+<Tip>
+When scanning console output, look for `[FAIL]` and `[ERR ]` lines first. Passed and skipped tests rarely need attention. The summary line at the bottom tells you immediately whether the run was clean.
+</Tip>
+
+<Note>
+If you are running tests from in-game, the output is sent as chat messages to the command sender. For detailed output (especially stack traces), check the server console log instead.
+</Note>
+
+## Next Steps
+
+- [File Export](/running/file-export) - machine-readable JSON output
+- [Commands](/running/commands) - the full command reference
+- [Filtering & Tags](/writing-tests/filtering-and-tags) - reduce output by running targeted tests
